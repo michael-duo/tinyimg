@@ -47,7 +47,7 @@ export default function ResultCard({ result, index }: ResultCardProps) {
       style={{ animationDelay: `${index * 40}ms` }}
     >
       {/* Thumbnail */}
-      <div className={`w-11 h-11 rounded-lg overflow-hidden flex-shrink-0 bg-bg-primary ${status === 'processing' ? 'shimmer' : ''}`}>
+      <div className={`w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-bg-primary ${status === 'processing' ? 'shimmer' : ''}`}>
         {thumbnailUrl && (
           <img src={thumbnailUrl} alt="" className={`w-full h-full object-cover ${status === 'processing' ? 'opacity-40' : ''}`} />
         )}
@@ -69,7 +69,7 @@ export default function ResultCard({ result, index }: ResultCardProps) {
 
       {/* Status / sizes */}
       {status === 'done' && sizes && (
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-3 shrink-0">
           <span className="text-text-secondary text-sm">{formatSize(sizes.original)}</span>
           <span className="text-gold/40">→</span>
           <span className="text-white text-sm font-semibold">{formatSize(sizes.compressed)}</span>
@@ -90,7 +90,7 @@ export default function ResultCard({ result, index }: ResultCardProps) {
       )}
 
       {status === 'processing' && (
-        <svg className="progress-ring w-5 h-5 flex-shrink-0" viewBox="0 0 36 36">
+        <svg className="progress-ring w-5 h-5 shrink-0" viewBox="0 0 36 36">
           <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(201,168,76,0.15)" strokeWidth="3" />
           <circle cx="18" cy="18" r="14" fill="none" stroke="#c9a84c" strokeWidth="3" strokeDasharray="60 28" strokeLinecap="round" />
         </svg>

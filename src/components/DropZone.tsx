@@ -92,7 +92,7 @@ export default function DropZone({ onFiles, disabled = false, compact = false }:
           transition-all duration-300 select-none outline-none
           ${isDragging
             ? 'bg-gold/10 border border-gold/30'
-            : 'border border-dashed border-border hover:border-gold/30 hover:bg-white/[0.02]'
+            : 'border border-dashed border-border hover:border-gold/30 hover:bg-white/2'
           }
           ${disabled ? 'opacity-40 pointer-events-none' : ''}
         `}

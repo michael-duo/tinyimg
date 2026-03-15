@@ -45,9 +45,7 @@ export default function ImageProcessor() {
   const showToast = useCallback((message: string) => {
     const id = ++toastCounter;
     setToasts((prev) => [...prev, { message, id }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
   }, []);
 
   const validateFiles = useCallback(
@@ -60,18 +58,9 @@ export default function ImageProcessor() {
       const accepted: File[] = [];
       const errors: string[] = [];
       for (const file of files) {
-        if (existingCount + accepted.length >= MAX_FILE_COUNT) {
-          errors.push(`Only ${MAX_FILE_COUNT} files max — some files were skipped.`);
-          break;
-        }
-        if (!SUPPORTED_INPUT_TYPES.has(file.type)) {
-          errors.push(`"${file.name}" is not a supported image type.`);
-          continue;
-        }
-        if (file.size > MAX_FILE_SIZE) {
-          errors.push(`"${file.name}" exceeds the 20 MB size limit.`);
-          continue;
-        }
+        if (existingCount + accepted.length >= MAX_FILE_COUNT) { errors.push(`Only ${MAX_FILE_COUNT} files max.`); break; }
+        if (!SUPPORTED_INPUT_TYPES.has(file.type)) { errors.push(`"${file.name}" is not supported.`); continue; }
+        if (file.size > MAX_FILE_SIZE) { errors.push(`"${file.name}" exceeds 20 MB.`); continue; }
         accepted.push(file);
       }
       [...new Set(errors)].forEach(showToast);
@@ -84,89 +73,58 @@ export default function ImageProcessor() {
     async (files: File[]) => {
       if (files.length === 0) return;
       setIsProcessing(true);
-
       if (workerRef.current) workerRef.current.terminate();
-      const worker = new Worker(
-        new URL('../workers/image-worker.ts', import.meta.url),
-        { type: 'module' }
-      );
+      const worker = new Worker(new URL('../workers/image-worker.ts', import.meta.url), { type: 'module' });
       workerRef.current = worker;
 
       const newResults: FileResult[] = files.map((file) => ({
-        id: String(++resultCounter),
-        originalFile: file,
-        blob: null,
-        sizes: null,
-        dimensions: null,
-        status: 'pending',
-        error: null,
-        outputFormat: format === 'original' ? file.type : format,
+        id: String(++resultCounter), originalFile: file, blob: null, sizes: null, dimensions: null,
+        status: 'pending', error: null, outputFormat: format === 'original' ? file.type : format,
         isAnimatedGif: file.type === 'image/gif',
       }));
-
       setResults((prev) => [...prev, ...newResults]);
 
       for (const entry of newResults) {
         const file = entry.originalFile;
         const outputFormat = format === 'original' ? file.type : format;
+        setResults((prev) => prev.map((r) => r.id === entry.id ? { ...r, status: 'processing' } : r));
 
-        setResults((prev) =>
-          prev.map((r) => r.id === entry.id ? { ...r, status: 'processing' } : r)
-        );
-
-        const workerResult = await new Promise<{
-          blob: Blob; originalSize: number; newSize: number; width: number; height: number;
-        } | { error: string }>((resolve) => {
-          const timeout = setTimeout(() => resolve({ error: 'Processing timed out' }), WORKER_TIMEOUT_MS);
-          const handler = (e: MessageEvent) => {
-            clearTimeout(timeout);
-            worker.removeEventListener('message', handler);
-            resolve(e.data.type === 'result' ? e.data : { error: e.data.message ?? 'Unknown error' });
-          };
-          worker.addEventListener('message', handler);
+        const res = await new Promise<{ blob: Blob; originalSize: number; newSize: number; width: number; height: number } | { error: string }>((resolve) => {
+          const t = setTimeout(() => resolve({ error: 'Timed out' }), WORKER_TIMEOUT_MS);
+          const h = (e: MessageEvent) => { clearTimeout(t); worker.removeEventListener('message', h); resolve(e.data.type === 'result' ? e.data : { error: e.data.message ?? 'Error' }); };
+          worker.addEventListener('message', h);
           worker.postMessage({ type: 'process', file, settings: { format } });
         });
 
-        if ('error' in workerResult) {
-          setResults((prev) =>
-            prev.map((r) => r.id === entry.id ? { ...r, status: 'error', error: workerResult.error } : r)
-          );
+        if ('error' in res) {
+          setResults((prev) => prev.map((r) => r.id === entry.id ? { ...r, status: 'error', error: res.error } : r));
         } else {
-          setResults((prev) =>
-            prev.map((r) => r.id === entry.id ? {
-              ...r, status: 'done', blob: workerResult.blob, outputFormat,
-              sizes: { original: workerResult.originalSize, compressed: workerResult.newSize },
-              dimensions: { width: workerResult.width, height: workerResult.height },
-            } : r)
-          );
+          setResults((prev) => prev.map((r) => r.id === entry.id ? {
+            ...r, status: 'done', blob: res.blob, outputFormat,
+            sizes: { original: res.originalSize, compressed: res.newSize },
+            dimensions: { width: res.width, height: res.height },
+          } : r));
         }
       }
-
-      worker.terminate();
-      workerRef.current = null;
-      setIsProcessing(false);
+      worker.terminate(); workerRef.current = null; setIsProcessing(false);
     },
     [format]
   );
 
-  const handleFiles = useCallback(
-    (files: File[]) => {
-      const accepted = validateFiles(files);
-      if (accepted.length > 0) processFiles(accepted);
-    },
-    [validateFiles, processFiles]
-  );
+  const handleFiles = useCallback((files: File[]) => {
+    const accepted = validateFiles(files);
+    if (accepted.length > 0) processFiles(accepted);
+  }, [validateFiles, processFiles]);
 
   const handleClear = useCallback(() => {
     if (workerRef.current) { workerRef.current.terminate(); workerRef.current = null; }
-    setIsProcessing(false);
-    setResults([]);
+    setIsProcessing(false); setResults([]);
   }, []);
 
   const totalProcessed = results.filter((r) => r.status === 'done' || r.status === 'error').length;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div>
       {/* Toasts */}
       <div aria-live="polite" className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
         {toasts.map((toast) => (
@@ -176,9 +134,9 @@ export default function ImageProcessor() {
         ))}
       </div>
 
-      {/* ── STATE 1: No results → full dropzone + format pills ── */}
+      {/* ── STATE 1: Empty → full dropzone + format pills ── */}
       {!hasResults && (
-        <>
+        <div className="flex flex-col gap-3">
           <DropZone onFiles={handleFiles} disabled={isProcessing} />
           <div className="flex items-center justify-center gap-2">
             <span className="text-text-secondary text-xs">Convert to:</span>
@@ -198,12 +156,13 @@ export default function ImageProcessor() {
               ))}
             </div>
           </div>
-        </>
+        </div>
       )}
 
-      {/* ── STATE 2: Has results → grid layout ── */}
+      {/* ── STATE 2: Has results → centered inline table ── */}
       {hasResults && (
-        <div className="flex flex-col gap-3">
+        <div className="max-w-xl mx-auto">
+          {/* Stats + actions bar */}
           <BulkActions
             results={results}
             onClear={handleClear}
@@ -211,13 +170,14 @@ export default function ImageProcessor() {
             totalFiles={results.length}
           />
 
-          {/* Card grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {/* File rows */}
+          <div className="py-1">
             {results.map((result, i) => (
               <ResultCard key={result.id} result={result} index={i} />
             ))}
           </div>
 
+          {/* Add more */}
           <DropZone onFiles={handleFiles} disabled={isProcessing} compact />
         </div>
       )}

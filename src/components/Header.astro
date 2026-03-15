@@ -6,7 +6,7 @@ const navLinks = [
 ];
 ---
 
-<header id="site-header" class="fixed top-0 left-0 right-0 z-50 transition-all duration-500">
+<header id="site-header" class="fixed top-0 left-0 right-0 z-50 header-blur">
   <div class="max-w-6xl mx-auto px-6 md:px-10 py-4 flex justify-between items-center">
     <a href="/" class="flex items-center gap-2.5 group">
       <div class="w-8 h-8 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center group-hover:bg-gold/15 transition-colors">
@@ -48,19 +48,30 @@ const navLinks = [
 <!-- Spacer for fixed header -->
 <div class="h-16"></div>
 
+<style>
+  .header-blur {
+    background: transparent;
+    border-bottom: 1px solid transparent;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+    transition: background 0.4s ease, border-color 0.4s ease, backdrop-filter 0.4s ease, -webkit-backdrop-filter 0.4s ease;
+  }
+  .header-blur.scrolled {
+    background: rgba(8, 9, 10, 0.75);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border-bottom-color: var(--color-border);
+  }
+</style>
+
 <script>
   const header = document.getElementById('site-header');
-  let lastScroll = 0;
 
   window.addEventListener('scroll', () => {
-    const currentScroll = window.scrollY;
-
-    if (currentScroll > 20) {
-      header?.classList.add('glass', 'border-b', 'border-border');
+    if (window.scrollY > 20) {
+      header?.classList.add('scrolled');
     } else {
-      header?.classList.remove('glass', 'border-b', 'border-border');
+      header?.classList.remove('scrolled');
     }
-
-    lastScroll = currentScroll;
   }, { passive: true });
 </script>

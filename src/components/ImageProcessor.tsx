@@ -36,6 +36,7 @@ export default function ImageProcessor() {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const workerRef = useRef<Worker | null>(null);
+  const hasResults = results.length > 0;
 
   useEffect(() => {
     detectOutputFormats().then(setOutputFormats);
@@ -52,15 +53,12 @@ export default function ImageProcessor() {
   const validateFiles = useCallback(
     (files: File[]): File[] => {
       const existingCount = results.length;
-
       if (existingCount >= MAX_FILE_COUNT) {
         showToast(`Maximum ${MAX_FILE_COUNT} files allowed.`);
         return [];
       }
-
       const accepted: File[] = [];
       const errors: string[] = [];
-
       for (const file of files) {
         if (existingCount + accepted.length >= MAX_FILE_COUNT) {
           errors.push(`Only ${MAX_FILE_COUNT} files max — some files were skipped.`);
@@ -76,10 +74,7 @@ export default function ImageProcessor() {
         }
         accepted.push(file);
       }
-
-      const unique = [...new Set(errors)];
-      unique.forEach(showToast);
-
+      [...new Set(errors)].forEach(showToast);
       return accepted;
     },
     [results.length, showToast]
@@ -88,12 +83,9 @@ export default function ImageProcessor() {
   const processFiles = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
-
       setIsProcessing(true);
 
-      if (workerRef.current) {
-        workerRef.current.terminate();
-      }
+      if (workerRef.current) workerRef.current.terminate();
       const worker = new Worker(
         new URL('../workers/image-worker.ts', import.meta.url),
         { type: 'module' }
@@ -114,76 +106,38 @@ export default function ImageProcessor() {
 
       setResults((prev) => [...prev, ...newResults]);
 
-      for (let i = 0; i < newResults.length; i++) {
-        const entry = newResults[i];
+      for (const entry of newResults) {
         const file = entry.originalFile;
         const outputFormat = format === 'original' ? file.type : format;
 
         setResults((prev) =>
-          prev.map((r) =>
-            r.id === entry.id ? { ...r, status: 'processing' } : r
-          )
+          prev.map((r) => r.id === entry.id ? { ...r, status: 'processing' } : r)
         );
 
         const workerResult = await new Promise<{
-          blob: Blob;
-          originalSize: number;
-          newSize: number;
-          width: number;
-          height: number;
+          blob: Blob; originalSize: number; newSize: number; width: number; height: number;
         } | { error: string }>((resolve) => {
-          const timeout = setTimeout(() => {
-            resolve({ error: 'Processing timed out' });
-          }, WORKER_TIMEOUT_MS);
-
+          const timeout = setTimeout(() => resolve({ error: 'Processing timed out' }), WORKER_TIMEOUT_MS);
           const handler = (e: MessageEvent) => {
             clearTimeout(timeout);
             worker.removeEventListener('message', handler);
-            if (e.data.type === 'result') {
-              resolve(e.data);
-            } else {
-              resolve({ error: e.data.message ?? 'Unknown error' });
-            }
+            resolve(e.data.type === 'result' ? e.data : { error: e.data.message ?? 'Unknown error' });
           };
-
           worker.addEventListener('message', handler);
-          worker.postMessage({
-            type: 'process',
-            file,
-            settings: {
-              format,
-            },
-          });
+          worker.postMessage({ type: 'process', file, settings: { format } });
         });
 
         if ('error' in workerResult) {
           setResults((prev) =>
-            prev.map((r) =>
-              r.id === entry.id
-                ? { ...r, status: 'error', error: workerResult.error }
-                : r
-            )
+            prev.map((r) => r.id === entry.id ? { ...r, status: 'error', error: workerResult.error } : r)
           );
         } else {
           setResults((prev) =>
-            prev.map((r) =>
-              r.id === entry.id
-                ? {
-                    ...r,
-                    status: 'done',
-                    blob: workerResult.blob,
-                    outputFormat,
-                    sizes: {
-                      original: workerResult.originalSize,
-                      compressed: workerResult.newSize,
-                    },
-                    dimensions: {
-                      width: workerResult.width,
-                      height: workerResult.height,
-                    },
-                  }
-                : r
-            )
+            prev.map((r) => r.id === entry.id ? {
+              ...r, status: 'done', blob: workerResult.blob, outputFormat,
+              sizes: { original: workerResult.originalSize, compressed: workerResult.newSize },
+              dimensions: { width: workerResult.width, height: workerResult.height },
+            } : r)
           );
         }
       }
@@ -204,75 +158,69 @@ export default function ImageProcessor() {
   );
 
   const handleClear = useCallback(() => {
-    if (workerRef.current) {
-      workerRef.current.terminate();
-      workerRef.current = null;
-    }
+    if (workerRef.current) { workerRef.current.terminate(); workerRef.current = null; }
     setIsProcessing(false);
     setResults([]);
   }, []);
 
-  const totalProcessed = results.filter(
-    (r) => r.status === 'done' || r.status === 'error'
-  ).length;
+  const totalProcessed = results.filter((r) => r.status === 'done' || r.status === 'error').length;
 
   return (
     <div className="flex flex-col gap-3">
       {/* Toasts */}
-      <div
-        aria-live="polite"
-        className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"
-      >
+      <div aria-live="polite" className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
         {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className="toast-enter bg-bg-card border border-border text-text-primary text-sm px-4 py-3 rounded-xl shadow-lg pointer-events-auto max-w-xs"
-            role="alert"
-          >
+          <div key={toast.id} className="toast-enter bg-bg-card border border-border text-text-primary text-sm px-4 py-3 rounded-xl shadow-lg pointer-events-auto max-w-xs" role="alert">
             {toast.message}
           </div>
         ))}
       </div>
 
-      {/* Drop Zone */}
-      <DropZone onFiles={handleFiles} disabled={isProcessing} />
-
-      {/* Compact format selector — only if no results yet */}
-      {results.length === 0 && (
-        <div className="flex items-center justify-center gap-2">
-          <span className="text-text-secondary text-xs">Convert to:</span>
-          <div className="flex gap-1">
-            {['original', ...outputFormats].map((fmt) => (
-              <button
-                key={fmt}
-                onClick={() => setFormat(fmt)}
-                className={`text-xs px-3 py-1.5 rounded-lg transition-all duration-200 cursor-pointer ${
-                  format === fmt
-                    ? 'bg-gold text-bg-primary font-semibold'
-                    : 'bg-white/5 text-text-secondary hover:bg-white/10 hover:text-text-primary'
-                }`}
-              >
-                {FORMAT_LABELS[fmt] ?? fmt}
-              </button>
-            ))}
+      {/* ── STATE 1: No results → full dropzone + format pills ── */}
+      {!hasResults && (
+        <>
+          <DropZone onFiles={handleFiles} disabled={isProcessing} />
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-text-secondary text-xs">Convert to:</span>
+            <div className="flex gap-1">
+              {['original', ...outputFormats].map((fmt) => (
+                <button
+                  key={fmt}
+                  onClick={() => setFormat(fmt)}
+                  className={`text-xs px-3 py-1.5 rounded-lg transition-all duration-200 cursor-pointer ${
+                    format === fmt
+                      ? 'bg-gold text-bg-primary font-semibold'
+                      : 'bg-white/5 text-text-secondary hover:bg-white/10 hover:text-text-primary'
+                  }`}
+                >
+                  {FORMAT_LABELS[fmt] ?? fmt}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        </>
       )}
 
-      {/* Results */}
-      {results.length > 0 && (
-        <div className="flex flex-col gap-1.5">
+      {/* ── STATE 2: Has results → compact layout ── */}
+      {hasResults && (
+        <div className="flex flex-col gap-2">
+          {/* Stats bar + actions */}
           <BulkActions
             results={results}
             onClear={handleClear}
             totalProcessed={totalProcessed}
             totalFiles={results.length}
           />
+
+          {/* Result list */}
           <div className="flex flex-col gap-1.5">
             {results.map((result, i) => (
               <ResultCard key={result.id} result={result} index={i} />
             ))}
           </div>
+
+          {/* Compact add-more zone at bottom */}
+          <DropZone onFiles={handleFiles} disabled={isProcessing} compact />
         </div>
       )}
     </div>

@@ -3,9 +3,11 @@ import { useRef, useState, useCallback } from 'react';
 interface DropZoneProps {
   onFiles: (files: File[]) => void;
   disabled?: boolean;
+  /** Compact mode when results exist */
+  compact?: boolean;
 }
 
-export default function DropZone({ onFiles, disabled = false }: DropZoneProps) {
+export default function DropZone({ onFiles, disabled = false, compact = false }: DropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
@@ -57,36 +59,70 @@ export default function DropZone({ onFiles, disabled = false }: DropZoneProps) {
     }
   };
 
+  const sharedProps = {
+    onDragEnter: handleDragEnter,
+    onDragLeave: handleDragLeave,
+    onDragOver: handleDragOver,
+    onDrop: handleDrop,
+    onClick: handleClick,
+    onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') handleClick(); },
+  };
+
+  const fileInput = (
+    <input
+      ref={inputRef}
+      type="file"
+      multiple
+      accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
+      className="hidden"
+      onChange={handleInputChange}
+      disabled={disabled}
+    />
+  );
+
+  /* ── Compact: inline strip ── */
+  if (compact) {
+    return (
+      <div
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-label="Add more files"
+        className={`
+          flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg cursor-pointer
+          transition-all duration-300 select-none outline-none
+          ${isDragging
+            ? 'bg-gold/10 border border-gold/30'
+            : 'border border-dashed border-border hover:border-gold/30 hover:bg-white/[0.02]'
+          }
+          ${disabled ? 'opacity-40 pointer-events-none' : ''}
+        `}
+        {...sharedProps}
+      >
+        {fileInput}
+        <svg className="w-3.5 h-3.5 text-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+        <span className="text-text-secondary text-xs">
+          {isDragging ? 'Drop here' : 'Add more images'}
+        </span>
+      </div>
+    );
+  }
+
+  /* ── Full: hero drop zone ── */
   return (
     <div
       className={`dropzone ${isDragging ? 'dragging' : ''} ${disabled ? 'opacity-40 pointer-events-none' : ''}`}
       role="button"
       tabIndex={disabled ? -1 : 0}
       aria-label="Drop zone: drop images here or click to browse"
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-      onClick={handleClick}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleClick(); }}
+      {...sharedProps}
     >
-      {/* Inner element for bottom brackets (::before, ::after) */}
       <div className="dropzone-inner absolute inset-0 pointer-events-none" />
-
-      {/* Hover background gradient */}
       <div className="dropzone-bg" />
 
-      {/* Content */}
       <div className="relative z-10 py-8 px-6 text-center select-none outline-none flex flex-col items-center gap-2">
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
-          className="hidden"
-          onChange={handleInputChange}
-          disabled={disabled}
-        />
+        {fileInput}
 
         <div className="flex items-center gap-3">
           <div className={`dropzone-icon p-2.5 rounded-lg transition-all duration-500 ${
@@ -99,7 +135,6 @@ export default function DropZone({ onFiles, disabled = false }: DropZoneProps) {
               viewBox="0 0 24 24"
               stroke="currentColor"
               strokeWidth={1.5}
-              aria-hidden="true"
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
             </svg>
@@ -112,7 +147,7 @@ export default function DropZone({ onFiles, disabled = false }: DropZoneProps) {
         </div>
 
         <p className="text-text-secondary text-sm">
-          or <span className="text-gold/80 underline underline-offset-2 decoration-gold/30 hover:text-gold hover:decoration-gold/50 transition-colors">browse files</span>
+          or <span className="text-gold/80 underline underline-offset-2 decoration-gold/30">browse files</span>
           <span className="text-text-secondary/30 text-[11px] ml-2">· JPEG · PNG · WebP · AVIF · GIF</span>
         </p>
       </div>

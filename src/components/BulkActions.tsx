@@ -27,10 +27,10 @@ export default function BulkActions({ results, onClear, totalProcessed, totalFil
   };
 
   return (
-    <div className="flex items-center justify-between pb-2.5 border-b border-white/5">
-      <div className="flex items-center gap-3 text-xs">
+    <div className="flex items-center justify-between py-3 border-b border-white/5">
+      <div className="flex items-center gap-3 text-sm">
         {isProcessing && (
-          <svg className="progress-ring w-3.5 h-3.5" viewBox="0 0 36 36">
+          <svg className="progress-ring w-4 h-4" viewBox="0 0 36 36">
             <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(201,168,76,0.2)" strokeWidth="3" />
             <circle cx="18" cy="18" r="14" fill="none" stroke="#c9a84c" strokeWidth="3" strokeDasharray="60 28" strokeLinecap="round" />
           </svg>
@@ -47,14 +47,14 @@ export default function BulkActions({ results, onClear, totalProcessed, totalFil
         {doneResults.length > 1 && (
           <button
             onClick={handleDownloadAll}
-            className="btn-shine bg-gold hover:bg-gold-light text-bg-primary text-[11px] font-bold px-3.5 py-1.5 rounded-md transition-all duration-200 cursor-pointer"
+            className="btn-shine bg-gold hover:bg-gold-light text-bg-primary text-xs font-bold px-4 py-2 rounded-md transition-all duration-200 cursor-pointer"
           >
             ↓ Save All
           </button>
         )}
         <button
           onClick={onClear}
-          className="text-text-secondary/40 hover:text-error text-[11px] cursor-pointer transition-colors"
+          className="text-text-secondary/50 hover:text-error text-sm cursor-pointer transition-colors"
         >
           Clear
         </button>

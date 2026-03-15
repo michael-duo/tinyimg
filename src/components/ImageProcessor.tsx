@@ -162,7 +162,7 @@ export default function ImageProcessor() {
 
       {/* ── STATE 2: Has results → centered inline table ── */}
       {hasResults && (
-        <div className="max-w-xl mx-auto">
+        <div className="max-w-2xl mx-auto">
           {/* Stats + actions bar */}
           <BulkActions
             results={results}

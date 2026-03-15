@@ -2,8 +2,20 @@
 import Layout from '../layouts/Layout.astro';
 import Header from '../components/Header.astro';
 import Hero from '../components/Hero.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import FAQ from '../components/FAQ.astro';
+import Footer from '../components/Footer.astro';
 ---
 <Layout>
   <Header />
   <Hero />
+  <div id="tool" class="px-6 md:px-12 mt-8">
+    <!-- ImageProcessor React island will go here in next chunk -->
+    <div class="border-2 border-dashed border-gold rounded-2xl bg-gold-dim p-16 text-center">
+      <p class="text-white text-lg font-medium">Image Processor (coming next)</p>
+    </div>
+  </div>
+  <HowItWorks />
+  <FAQ />
+  <Footer />
 </Layout>

@@ -1,0 +1,47 @@
+---
+const faqs = [
+  {
+    question: 'Is my data safe?',
+    answer: 'Absolutely. CompressImg runs entirely in your browser using Web Workers. Your images are never uploaded to any server — all processing happens locally on your device. Your files never leave your computer.',
+  },
+  {
+    question: 'What formats are supported?',
+    answer: 'CompressImg supports JPEG, PNG, WebP, AVIF, and GIF as input formats. You can convert between any of these formats and output as JPEG, PNG, WebP, or AVIF.',
+  },
+  {
+    question: 'How much can I compress?',
+    answer: 'Compression ratios vary by image content and format. Typically you can expect 30–80% file size reduction. Converting PNG to WebP or AVIF often yields the greatest savings without visible quality loss.',
+  },
+  {
+    question: 'Is there a file size limit?',
+    answer: 'There are no server-side limits since everything runs locally. The practical limit is your device\'s available memory. Most modern devices can handle images up to 50 MB or more without issues.',
+  },
+  {
+    question: 'Does it work on mobile?',
+    answer: 'Yes! CompressImg is fully responsive and works on modern mobile browsers. Processing is handled by Web Workers, so it won\'t freeze your browser UI even on mobile devices.',
+  },
+  {
+    question: 'Is it really free?',
+    answer: 'Yes, CompressImg is completely free with no hidden fees, no sign-up, and no watermarks. There are no limits on usage — compress as many images as you like.',
+  },
+];
+---
+
+<section id="faq" class="px-6 md:px-12 py-16">
+  <h2 class="text-2xl md:text-3xl font-bold text-white text-center mb-12">
+    Frequently Asked <span class="text-gold">Questions</span>
+  </h2>
+  <div class="max-w-3xl mx-auto flex flex-col gap-3">
+    {faqs.map(faq => (
+      <details class="bg-bg-card border border-border rounded-xl group">
+        <summary class="flex justify-between items-center px-6 py-5 cursor-pointer list-none text-white font-medium hover:text-gold transition-colors select-none">
+          {faq.question}
+          <span class="text-gold text-xl font-light ml-4 transition-transform group-open:rotate-45">+</span>
+        </summary>
+        <p class="px-6 pb-5 text-text-secondary text-sm leading-relaxed">
+          {faq.answer}
+        </p>
+      </details>
+    ))}
+  </div>
+</section>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import DropZone from './DropZone';
 import SettingsBar from './SettingsBar';
 import type { Settings } from './SettingsBar';

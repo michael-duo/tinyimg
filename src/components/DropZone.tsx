@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback } from 'react';
 
 interface DropZoneProps {
   onFiles: (files: File[]) => void;

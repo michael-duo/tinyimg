@@ -1,4 +1,3 @@
-import React from 'react';
 import type { ImageFormat } from '../lib/format-support';
 import { FORMAT_LABELS } from '../lib/format-support';
 

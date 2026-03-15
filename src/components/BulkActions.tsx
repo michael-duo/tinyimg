@@ -1,4 +1,3 @@
-import React from 'react';
 import { formatSize } from '../lib/format';
 import { downloadAll, getCompressedFilename } from '../lib/download';
 import type { FileResult } from './ResultCard';

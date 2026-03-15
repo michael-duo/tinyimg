@@ -268,8 +268,8 @@ export default function ImageProcessor() {
             totalFiles={results.length}
           />
           <div className="flex flex-col gap-3">
-            {results.map((result) => (
-              <ResultCard key={result.id} result={result} />
+            {results.map((result, i) => (
+              <ResultCard key={result.id} result={result} index={i} />
             ))}
           </div>
         </div>

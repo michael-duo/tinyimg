@@ -77,7 +77,7 @@ export default function DropZone({ onFiles, disabled = false }: DropZoneProps) {
       <div className="dropzone-bg" />
 
       {/* Content */}
-      <div className="relative z-10 py-14 px-8 text-center select-none outline-none">
+      <div className="relative z-10 py-8 px-6 text-center select-none outline-none flex flex-col items-center gap-2">
         <input
           ref={inputRef}
           type="file"
@@ -88,14 +88,13 @@ export default function DropZone({ onFiles, disabled = false }: DropZoneProps) {
           disabled={disabled}
         />
 
-        {/* Icon */}
-        <div className="flex justify-center mb-5">
-          <div className={`dropzone-icon p-4 rounded-xl transition-all duration-500 ${
+        <div className="flex items-center gap-3">
+          <div className={`dropzone-icon p-2.5 rounded-lg transition-all duration-500 ${
             isDragging ? 'bg-gold/15' : 'bg-white/[0.03]'
           }`}>
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className={`w-7 h-7 transition-colors duration-300 ${isDragging ? 'text-gold' : 'text-text-secondary'}`}
+              className={`w-5 h-5 transition-colors duration-300 ${isDragging ? 'text-gold' : 'text-text-secondary'}`}
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -105,18 +104,16 @@ export default function DropZone({ onFiles, disabled = false }: DropZoneProps) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
             </svg>
           </div>
+          <p className={`text-base font-semibold tracking-tight transition-colors duration-300 ${
+            isDragging ? 'text-gold' : 'text-white'
+          }`}>
+            {isDragging ? 'Release to compress' : 'Drop images to compress'}
+          </p>
         </div>
 
-        <p className={`text-lg font-semibold mb-1 tracking-tight transition-colors duration-300 ${
-          isDragging ? 'text-gold' : 'text-white'
-        }`}>
-          {isDragging ? 'Release to compress' : 'Drop images to compress'}
-        </p>
         <p className="text-text-secondary text-sm">
           or <span className="text-gold/80 underline underline-offset-2 decoration-gold/30 hover:text-gold hover:decoration-gold/50 transition-colors">browse files</span>
-        </p>
-        <p className="text-text-secondary/30 text-[11px] mt-4 tracking-wide">
-          JPEG · PNG · WebP · AVIF · GIF — max 20 MB · 50 files
+          <span className="text-text-secondary/30 text-[11px] ml-2">· JPEG · PNG · WebP · AVIF · GIF</span>
         </p>
       </div>
     </div>

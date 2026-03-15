@@ -217,7 +217,7 @@ export default function ImageProcessor() {
   ).length;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-3">
       {/* Toasts */}
       <div
         aria-live="polite"
@@ -261,14 +261,14 @@ export default function ImageProcessor() {
 
       {/* Results */}
       {results.length > 0 && (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1.5">
           <BulkActions
             results={results}
             onClear={handleClear}
             totalProcessed={totalProcessed}
             totalFiles={results.length}
           />
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-1.5">
             {results.map((result, i) => (
               <ResultCard key={result.id} result={result} index={i} />
             ))}

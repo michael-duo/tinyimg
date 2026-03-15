@@ -59,26 +59,22 @@ export default function DropZone({ onFiles, disabled = false }: DropZoneProps) {
 
   return (
     <div
-      className={`dropzone-wrapper ${isDragging ? 'dragging' : ''} ${disabled ? 'opacity-50 pointer-events-none' : ''}`}
+      className={`dropzone-wrapper ${isDragging ? 'dragging' : ''} ${disabled ? 'opacity-40 pointer-events-none' : ''}`}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      {/* Animated conic-gradient border */}
       <div className="dropzone-border">
         <div
           role="button"
           tabIndex={disabled ? -1 : 0}
           aria-label="Drop zone: drop images here or click to browse"
           className={`
-            relative rounded-[1.15rem] px-8 py-14 text-center cursor-pointer
+            relative rounded-[1.15rem] px-8 py-12 text-center cursor-pointer
             transition-all duration-500 ease-out select-none outline-none
             focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary
-            ${isDragging
-              ? 'bg-gold-dim scale-[1.01]'
-              : 'bg-bg-primary hover:bg-[#0e0e0e]'
-            }
+            ${isDragging ? 'bg-gold-dim scale-[1.01]' : 'bg-bg-primary hover:bg-[#0e0e0e]'}
           `}
           onClick={handleClick}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleClick(); }}
@@ -94,11 +90,11 @@ export default function DropZone({ onFiles, disabled = false }: DropZoneProps) {
           />
 
           {/* Floating upload icon */}
-          <div className="flex justify-center mb-5">
-            <div className={`float-icon p-4 rounded-2xl bg-gold-dim border border-gold/20 transition-all duration-300 ${isDragging ? 'scale-110 bg-gold/20' : ''}`}>
+          <div className="flex justify-center mb-4">
+            <div className={`float-icon p-3.5 rounded-2xl bg-gold-dim border border-gold/20 transition-all duration-300 ${isDragging ? 'scale-110 bg-gold/20' : ''}`}>
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                className="w-8 h-8 text-gold"
+                className="w-7 h-7 text-gold"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -110,27 +106,14 @@ export default function DropZone({ onFiles, disabled = false }: DropZoneProps) {
             </div>
           </div>
 
-          <p className="text-white text-xl font-semibold mb-1.5 tracking-tight">
-            {isDragging ? 'Release to upload' : 'Drop your images here'}
+          <p className="text-white text-lg font-semibold mb-1 tracking-tight">
+            {isDragging ? 'Release to compress' : 'Drop images to compress'}
           </p>
-          <p className="text-text-secondary text-sm mb-5">
-            or <span className="text-gold underline underline-offset-2 decoration-gold/40">click to browse</span> files
+          <p className="text-text-secondary text-sm">
+            or <span className="text-gold underline underline-offset-2 decoration-gold/40">browse files</span>
           </p>
-
-          {/* Format pills */}
-          <div className="flex flex-wrap gap-2 justify-center">
-            {['JPEG', 'PNG', 'WebP', 'AVIF', 'GIF'].map((fmt) => (
-              <span
-                key={fmt}
-                className="text-[10px] tracking-wider uppercase text-text-secondary/70 bg-white/[0.03] border border-white/[0.06] rounded-full px-3 py-1"
-              >
-                {fmt}
-              </span>
-            ))}
-          </div>
-
-          <p className="text-text-secondary/50 text-[11px] mt-4">
-            Up to 20 MB per file · Max 50 files at once
+          <p className="text-text-secondary/40 text-[11px] mt-3">
+            JPEG · PNG · WebP · AVIF · GIF — max 20 MB · 50 files
           </p>
         </div>
       </div>

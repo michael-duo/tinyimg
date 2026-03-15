@@ -2,8 +2,7 @@ export interface ProcessMessage {
   type: 'process';
   file: File;
   settings: {
-    quality: number; // 0-1
-    format: string;  // MIME type e.g. 'image/webp'
+    format: string;  // MIME type or 'original'
     maxWidth?: number;
   };
 }
@@ -21,6 +20,13 @@ export interface ErrorMessage {
   type: 'error';
   message: string;
 }
+
+/** Optimal quality per format for best size/quality tradeoff */
+const OPTIMAL_QUALITY: Record<string, number> = {
+  'image/jpeg': 0.80,
+  'image/webp': 0.82,
+  'image/avif': 0.72,
+};
 
 self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
   const { file, settings } = e.data;
@@ -44,13 +50,13 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
     ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
 
-    // 4. Convert + compress
+    // 4. Determine output format
     const outputType = settings.format === 'original' ? file.type : settings.format;
     const blobOptions: ImageEncodeOptions = { type: outputType };
 
     // PNG is lossless — quality param doesn't apply
     if (outputType !== 'image/png') {
-      blobOptions.quality = settings.quality;
+      blobOptions.quality = OPTIMAL_QUALITY[outputType] ?? 0.80;
     }
 
     const blob = await canvas.convertToBlob(blobOptions);

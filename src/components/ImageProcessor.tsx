@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import DropZone from './DropZone';
-import SettingsBar from './SettingsBar';
-import type { Settings } from './SettingsBar';
 import ResultCard from './ResultCard';
 import type { FileResult } from './ResultCard';
 import BulkActions from './BulkActions';
@@ -22,12 +20,16 @@ interface Toast {
 let toastCounter = 0;
 let resultCounter = 0;
 
+const FORMAT_LABELS: Record<string, string> = {
+  original: 'Same format',
+  'image/webp': 'WebP',
+  'image/jpeg': 'JPEG',
+  'image/png': 'PNG',
+  'image/avif': 'AVIF',
+};
+
 export default function ImageProcessor() {
-  const [settings, setSettings] = useState<Settings>({
-    quality: 80,
-    format: 'original',
-    maxWidth: undefined,
-  });
+  const [format, setFormat] = useState('original');
   const [results, setResults] = useState<FileResult[]>([]);
   const [outputFormats, setOutputFormats] = useState<ImageFormat[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -35,12 +37,10 @@ export default function ImageProcessor() {
 
   const workerRef = useRef<Worker | null>(null);
 
-  // Detect supported formats on mount
   useEffect(() => {
     detectOutputFormats().then(setOutputFormats);
   }, []);
 
-  // Show a toast that auto-dismisses after 4 seconds
   const showToast = useCallback((message: string) => {
     const id = ++toastCounter;
     setToasts((prev) => [...prev, { message, id }]);
@@ -49,7 +49,6 @@ export default function ImageProcessor() {
     }, 4000);
   }, []);
 
-  // Validate files and return only accepted ones
   const validateFiles = useCallback(
     (files: File[]): File[] => {
       const existingCount = results.length;
@@ -78,7 +77,6 @@ export default function ImageProcessor() {
         accepted.push(file);
       }
 
-      // Deduplicate error messages
       const unique = [...new Set(errors)];
       unique.forEach(showToast);
 
@@ -87,14 +85,12 @@ export default function ImageProcessor() {
     [results.length, showToast]
   );
 
-  // Process files sequentially using a Web Worker
   const processFiles = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
 
       setIsProcessing(true);
 
-      // Initialise a fresh worker for this batch
       if (workerRef.current) {
         workerRef.current.terminate();
       }
@@ -104,7 +100,6 @@ export default function ImageProcessor() {
       );
       workerRef.current = worker;
 
-      // Create pending result entries
       const newResults: FileResult[] = files.map((file) => ({
         id: String(++resultCounter),
         originalFile: file,
@@ -113,21 +108,17 @@ export default function ImageProcessor() {
         dimensions: null,
         status: 'pending',
         error: null,
-        outputFormat:
-          settings.format === 'original' ? file.type : settings.format,
+        outputFormat: format === 'original' ? file.type : format,
         isAnimatedGif: file.type === 'image/gif',
       }));
 
       setResults((prev) => [...prev, ...newResults]);
 
-      // Process each file sequentially
       for (let i = 0; i < newResults.length; i++) {
         const entry = newResults[i];
         const file = entry.originalFile;
-        const outputFormat =
-          settings.format === 'original' ? file.type : settings.format;
+        const outputFormat = format === 'original' ? file.type : format;
 
-        // Mark as processing
         setResults((prev) =>
           prev.map((r) =>
             r.id === entry.id ? { ...r, status: 'processing' } : r
@@ -160,9 +151,7 @@ export default function ImageProcessor() {
             type: 'process',
             file,
             settings: {
-              quality: settings.quality / 100,
-              format: settings.format,
-              maxWidth: settings.maxWidth,
+              format,
             },
           });
         });
@@ -203,7 +192,7 @@ export default function ImageProcessor() {
       workerRef.current = null;
       setIsProcessing(false);
     },
-    [settings]
+    [format]
   );
 
   const handleFiles = useCallback(
@@ -215,9 +204,6 @@ export default function ImageProcessor() {
   );
 
   const handleClear = useCallback(() => {
-    // Revoke any object URLs that ResultCard may have created via the blob prop
-    // (ResultCard manages its own thumbnail URLs internally, so we just need to
-    // terminate any ongoing work and reset state)
     if (workerRef.current) {
       workerRef.current.terminate();
       workerRef.current = null;
@@ -231,7 +217,7 @@ export default function ImageProcessor() {
   ).length;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       {/* Toasts */}
       <div
         aria-live="polite"
@@ -240,7 +226,7 @@ export default function ImageProcessor() {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className="bg-bg-card border border-border text-text-primary text-sm px-4 py-3 rounded-xl shadow-lg pointer-events-auto max-w-xs"
+            className="toast-enter bg-bg-card border border-border text-text-primary text-sm px-4 py-3 rounded-xl shadow-lg pointer-events-auto max-w-xs"
             role="alert"
           >
             {toast.message}
@@ -251,23 +237,38 @@ export default function ImageProcessor() {
       {/* Drop Zone */}
       <DropZone onFiles={handleFiles} disabled={isProcessing} />
 
-      {/* Settings */}
-      <SettingsBar
-        settings={settings}
-        onChange={setSettings}
-        outputFormats={outputFormats}
-      />
+      {/* Compact format selector — only if no results yet */}
+      {results.length === 0 && (
+        <div className="flex items-center justify-center gap-2">
+          <span className="text-text-secondary text-xs">Convert to:</span>
+          <div className="flex gap-1">
+            {['original', ...outputFormats].map((fmt) => (
+              <button
+                key={fmt}
+                onClick={() => setFormat(fmt)}
+                className={`text-xs px-3 py-1.5 rounded-lg transition-all duration-200 cursor-pointer ${
+                  format === fmt
+                    ? 'bg-gold text-bg-primary font-semibold'
+                    : 'bg-white/5 text-text-secondary hover:bg-white/10 hover:text-text-primary'
+                }`}
+              >
+                {FORMAT_LABELS[fmt] ?? fmt}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Results */}
       {results.length > 0 && (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           <BulkActions
             results={results}
             onClear={handleClear}
             totalProcessed={totalProcessed}
             totalFiles={results.length}
           />
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2.5">
             {results.map((result, i) => (
               <ResultCard key={result.id} result={result} index={i} />
             ))}

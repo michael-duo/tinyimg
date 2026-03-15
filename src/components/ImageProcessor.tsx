@@ -201,10 +201,9 @@ export default function ImageProcessor() {
         </>
       )}
 
-      {/* ── STATE 2: Has results → compact layout ── */}
+      {/* ── STATE 2: Has results → grid layout ── */}
       {hasResults && (
-        <div className="flex flex-col gap-2">
-          {/* Stats bar + actions */}
+        <div className="flex flex-col gap-3">
           <BulkActions
             results={results}
             onClear={handleClear}
@@ -212,14 +211,13 @@ export default function ImageProcessor() {
             totalFiles={results.length}
           />
 
-          {/* Result list */}
-          <div className="flex flex-col gap-1.5">
+          {/* Card grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {results.map((result, i) => (
               <ResultCard key={result.id} result={result} index={i} />
             ))}
           </div>
 
-          {/* Compact add-more zone at bottom */}
           <DropZone onFiles={handleFiles} disabled={isProcessing} compact />
         </div>
       )}

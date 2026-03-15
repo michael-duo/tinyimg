@@ -24,73 +24,121 @@
   }
 }
 
-/* ── DropZone animated border ── */
-@property --border-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
-
-@keyframes spin-border {
-  to { --border-angle: 360deg; }
-}
-
-.dropzone-border {
+/* ── DropZone: Corner Bracket Design ── */
+.dropzone {
+  --bracket-size: 28px;
+  --bracket-weight: 2px;
+  --bracket-color: rgba(201, 168, 76, 0.35);
+  --bracket-color-hover: #c9a84c;
   position: relative;
-  border-radius: 1.25rem;
+  cursor: pointer;
 }
 
-/* Animated conic-gradient border (behind content) */
-.dropzone-border::before {
+/* The four corner brackets */
+.dropzone::before,
+.dropzone::after,
+.dropzone-inner::before,
+.dropzone-inner::after {
   content: "";
+  position: absolute;
+  width: var(--bracket-size);
+  height: var(--bracket-size);
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+/* Top-left */
+.dropzone::before {
+  top: 0; left: 0;
+  border-top: var(--bracket-weight) solid var(--bracket-color);
+  border-left: var(--bracket-weight) solid var(--bracket-color);
+  border-radius: 4px 0 0 0;
+}
+
+/* Top-right */
+.dropzone::after {
+  top: 0; right: 0;
+  border-top: var(--bracket-weight) solid var(--bracket-color);
+  border-right: var(--bracket-weight) solid var(--bracket-color);
+  border-radius: 0 4px 0 0;
+}
+
+/* Bottom-left */
+.dropzone-inner::before {
+  bottom: 0; left: 0;
+  border-bottom: var(--bracket-weight) solid var(--bracket-color);
+  border-left: var(--bracket-weight) solid var(--bracket-color);
+  border-radius: 0 0 0 4px;
+}
+
+/* Bottom-right */
+.dropzone-inner::after {
+  bottom: 0; right: 0;
+  border-bottom: var(--bracket-weight) solid var(--bracket-color);
+  border-right: var(--bracket-weight) solid var(--bracket-color);
+  border-radius: 0 0 4px 0;
+}
+
+/* Hover: brackets expand + turn bright gold */
+.dropzone:hover::before,
+.dropzone:hover::after,
+.dropzone:hover .dropzone-inner::before,
+.dropzone:hover .dropzone-inner::after {
+  --bracket-size: 48px;
+  --bracket-weight: 2px;
+  --bracket-color: var(--bracket-color-hover);
+}
+
+/* Dragging: brackets go full-width to form complete border */
+.dropzone.dragging::before,
+.dropzone.dragging::after,
+.dropzone.dragging .dropzone-inner::before,
+.dropzone.dragging .dropzone-inner::after {
+  --bracket-size: 50%;
+  --bracket-weight: 2px;
+  --bracket-color: var(--bracket-color-hover);
+}
+
+/* Background gradient on hover */
+.dropzone-bg {
   position: absolute;
   inset: 0;
-  border-radius: 1.25rem;
-  padding: 2px;
-  background:
-    conic-gradient(from var(--border-angle), #c9a84c 0%, transparent 30%, transparent 70%, #c9a84c 100%);
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: spin-border 4s linear infinite;
-  pointer-events: none;
-}
-
-/* Glow effect behind the border */
-.dropzone-border::after {
-  content: "";
-  position: absolute;
-  inset: -6px;
-  border-radius: 1.5rem;
-  background:
-    conic-gradient(from var(--border-angle), rgba(201,168,76,0.3) 0%, transparent 30%, transparent 70%, rgba(201,168,76,0.3) 100%);
-  filter: blur(14px);
-  animation: spin-border 4s linear infinite;
-  z-index: -1;
+  border-radius: 16px;
   opacity: 0;
-  transition: opacity 0.4s ease;
+  transition: opacity 0.5s ease;
   pointer-events: none;
+  background: radial-gradient(
+    ellipse 60% 50% at 50% 50%,
+    rgba(201, 168, 76, 0.06) 0%,
+    transparent 70%
+  );
 }
 
-.dropzone-wrapper:hover .dropzone-border::after,
-.dropzone-wrapper.dragging .dropzone-border::after {
+.dropzone:hover .dropzone-bg {
   opacity: 1;
 }
 
-/* ── Upload icon float animation ── */
-@keyframes float-icon {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+.dropzone.dragging .dropzone-bg {
+  opacity: 1;
+  background: radial-gradient(
+    ellipse 80% 60% at 50% 50%,
+    rgba(201, 168, 76, 0.10) 0%,
+    transparent 70%
+  );
 }
 
-.float-icon {
-  animation: float-icon 3s ease-in-out infinite;
+/* ── Upload icon pulse on hover ── */
+@keyframes icon-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.05); opacity: 1; }
 }
 
-.dropzone-wrapper:hover .float-icon {
-  animation-duration: 1.5s;
+.dropzone:hover .dropzone-icon {
+  animation: icon-breathe 2s ease-in-out infinite;
+}
+
+.dropzone.dragging .dropzone-icon {
+  transform: scale(1.1);
 }
 
 /* ── Shimmer loading effect ── */

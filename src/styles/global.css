@@ -38,33 +38,44 @@
 .dropzone-border {
   position: relative;
   border-radius: 1.25rem;
-  animation: spin-border 4s linear infinite;
+}
+
+/* Animated conic-gradient border (behind content) */
+.dropzone-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 1.25rem;
+  padding: 2px;
   background:
-    conic-gradient(from var(--border-angle), #c9a84c 0%, transparent 30%, transparent 70%, #c9a84c 100%) border-box;
+    conic-gradient(from var(--border-angle), #c9a84c 0%, transparent 30%, transparent 70%, #c9a84c 100%);
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  padding: 2px;
+  animation: spin-border 4s linear infinite;
+  pointer-events: none;
 }
 
-.dropzone-border::before {
+/* Glow effect behind the border */
+.dropzone-border::after {
   content: "";
   position: absolute;
-  inset: -4px;
+  inset: -6px;
   border-radius: 1.5rem;
   background:
     conic-gradient(from var(--border-angle), rgba(201,168,76,0.3) 0%, transparent 30%, transparent 70%, rgba(201,168,76,0.3) 100%);
-  filter: blur(12px);
+  filter: blur(14px);
   animation: spin-border 4s linear infinite;
   z-index: -1;
   opacity: 0;
   transition: opacity 0.4s ease;
+  pointer-events: none;
 }
 
-.dropzone-wrapper:hover .dropzone-border::before,
-.dropzone-wrapper.dragging .dropzone-border::before {
+.dropzone-wrapper:hover .dropzone-border::after,
+.dropzone-wrapper.dragging .dropzone-border::after {
   opacity: 1;
 }
 

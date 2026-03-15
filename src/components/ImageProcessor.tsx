@@ -89,7 +89,7 @@ export default function ImageProcessor() {
         const outputFormat = format === 'original' ? file.type : format;
         setResults((prev) => prev.map((r) => r.id === entry.id ? { ...r, status: 'processing' } : r));
 
-        const res = await new Promise<{ blob: Blob; originalSize: number; newSize: number; width: number; height: number } | { error: string }>((resolve) => {
+        const res = await new Promise<{ blob: Blob; originalSize: number; newSize: number; width: number; height: number; actualFormat?: string } | { error: string }>((resolve) => {
           const t = setTimeout(() => resolve({ error: 'Timed out' }), WORKER_TIMEOUT_MS);
           const h = (e: MessageEvent) => { clearTimeout(t); worker.removeEventListener('message', h); resolve(e.data.type === 'result' ? e.data : { error: e.data.message ?? 'Error' }); };
           worker.addEventListener('message', h);
@@ -100,7 +100,8 @@ export default function ImageProcessor() {
           setResults((prev) => prev.map((r) => r.id === entry.id ? { ...r, status: 'error', error: res.error } : r));
         } else {
           setResults((prev) => prev.map((r) => r.id === entry.id ? {
-            ...r, status: 'done', blob: res.blob, outputFormat,
+            ...r, status: 'done', blob: res.blob,
+            outputFormat: res.actualFormat ?? outputFormat,
             sizes: { original: res.originalSize, compressed: res.newSize },
             dimensions: { width: res.width, height: res.height },
           } : r));

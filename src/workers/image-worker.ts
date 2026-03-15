@@ -14,6 +14,8 @@ export interface ResultMessage {
   newSize: number;
   width: number;
   height: number;
+  /** The actual output MIME type (may differ from requested if smart picked a better one) */
+  actualFormat: string;
 }
 
 export interface ErrorMessage {
@@ -21,12 +23,71 @@ export interface ErrorMessage {
   message: string;
 }
 
-/** Optimal quality per format for best size/quality tradeoff */
-const OPTIMAL_QUALITY: Record<string, number> = {
-  'image/jpeg': 0.80,
-  'image/webp': 0.82,
-  'image/avif': 0.72,
+/**
+ * Quality presets per format — aggressive but visually acceptable.
+ * Multiple levels tried from low to high; pick the first that's smaller than original.
+ */
+const QUALITY_LEVELS: Record<string, number[]> = {
+  'image/jpeg': [0.70, 0.78, 0.85],
+  'image/webp': [0.72, 0.80, 0.88],
+  'image/avif': [0.60, 0.70, 0.80],
 };
+
+/** Try encoding at given type+quality, return blob */
+async function tryEncode(
+  canvas: OffscreenCanvas,
+  type: string,
+  quality?: number
+): Promise<Blob> {
+  const opts: ImageEncodeOptions = { type };
+  if (quality !== undefined && type !== 'image/png') {
+    opts.quality = quality;
+  }
+  return canvas.convertToBlob(opts);
+}
+
+/**
+ * Smart compress: try multiple quality levels + WebP alternative.
+ * Pick the smallest result that's still smaller than original.
+ */
+async function smartCompress(
+  canvas: OffscreenCanvas,
+  requestedType: string,
+): Promise<Blob> {
+  const candidates: Blob[] = [];
+
+  // 1. Try requested format at multiple quality levels
+  const levels = QUALITY_LEVELS[requestedType];
+  if (levels) {
+    // Start with lowest quality (most aggressive) first
+    for (const q of levels) {
+      candidates.push(await tryEncode(canvas, requestedType, q));
+    }
+  } else {
+    // PNG or unknown — just encode as-is
+    candidates.push(await tryEncode(canvas, requestedType));
+  }
+
+  // 2. Always try WebP as alternative (often significantly smaller)
+  if (requestedType !== 'image/webp') {
+    const webpLevels = QUALITY_LEVELS['image/webp']!;
+    for (const q of webpLevels) {
+      candidates.push(await tryEncode(canvas, 'image/webp', q));
+    }
+  }
+
+  // 3. For PNG input, also try JPEG (drops alpha but much smaller for photos)
+  if (requestedType === 'image/png') {
+    const jpegLevels = QUALITY_LEVELS['image/jpeg']!;
+    for (const q of jpegLevels) {
+      candidates.push(await tryEncode(canvas, 'image/jpeg', q));
+    }
+  }
+
+  // 4. Pick the smallest candidate
+  candidates.sort((a, b) => a.size - b.size);
+  return candidates[0];
+}
 
 self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
   const { file, settings } = e.data;
@@ -50,16 +111,9 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
     ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
 
-    // 4. Determine output format
-    const outputType = settings.format === 'original' ? file.type : settings.format;
-    const blobOptions: ImageEncodeOptions = { type: outputType };
-
-    // PNG is lossless — quality param doesn't apply
-    if (outputType !== 'image/png') {
-      blobOptions.quality = OPTIMAL_QUALITY[outputType] ?? 0.80;
-    }
-
-    const blob = await canvas.convertToBlob(blobOptions);
+    // 4. Smart compress
+    const requestedType = settings.format === 'original' ? file.type : settings.format;
+    const blob = await smartCompress(canvas, requestedType);
 
     const response: ResultMessage = {
       type: 'result',
@@ -68,6 +122,7 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
       newSize: blob.size,
       width,
       height,
+      actualFormat: blob.type,
     };
 
     self.postMessage(response);

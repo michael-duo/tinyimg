@@ -1,0 +1,24 @@
+---
+const badges = [
+  '🔒 100% Client-Side',
+  '⚡ Web Worker Powered',
+  '📦 Bulk Processing',
+  '🔄 Format Convert',
+];
+---
+
+<section class="text-center px-6 md:px-12 pt-16 pb-8">
+  <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-3">
+    Compress Images <span class="text-gold">Instantly</span>
+  </h1>
+  <p class="text-text-secondary text-base md:text-lg max-w-xl mx-auto leading-relaxed mb-5">
+    Free, fast, and private. Compress, convert, and resize your images directly in your browser. No uploads to any server.
+  </p>
+  <div class="flex flex-wrap gap-3 justify-center">
+    {badges.map(badge => (
+      <span class="bg-bg-card border border-border rounded-full px-4 py-1.5 text-xs text-text-secondary tracking-wide">
+        {badge}
+      </span>
+    ))}
+  </div>
+</section>

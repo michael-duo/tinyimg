@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
+import fileSaver from 'file-saver';
+const { saveAs } = fileSaver;
 
 export interface DownloadableFile {
   blob: Blob;

@@ -1,7 +1,31 @@
 {
-  "name": "michael-compress-img",
+  "name": "compressimg",
   "type": "module",
   "version": "0.0.1",
+  "description": "Client-side image compression tool — compress, convert, and download images entirely in the browser with zero server uploads.",
+  "author": "Michael Duong",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michaelduong/compressimg.git"
+  },
+  "homepage": "https://github.com/michaelduong/compressimg#readme",
+  "bugs": {
+    "url": "https://github.com/michaelduong/compressimg/issues"
+  },
+  "keywords": [
+    "image-compression",
+    "image-converter",
+    "webp",
+    "avif",
+    "client-side",
+    "browser",
+    "astro",
+    "react",
+    "web-worker",
+    "offscreencanvas",
+    "privacy"
+  ],
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",

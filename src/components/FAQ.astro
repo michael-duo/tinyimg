@@ -2,46 +2,60 @@
 const faqs = [
   {
     question: 'Is my data safe?',
-    answer: 'Absolutely. CompressImg runs entirely in your browser using Web Workers. Your images are never uploaded to any server — all processing happens locally on your device. Your files never leave your computer.',
+    answer: 'Absolutely. CompressImg runs entirely in your browser using Web Workers. Your images are never uploaded to any server — all processing happens locally on your device.',
   },
   {
-    question: 'What formats are supported?',
-    answer: 'CompressImg supports JPEG, PNG, WebP, AVIF, and GIF as input formats. You can convert between any of these formats and output as JPEG, PNG, WebP, or AVIF.',
+    question: 'What image formats are supported?',
+    answer: 'Input: JPEG, PNG, WebP, AVIF, and GIF. You can convert between any of these and output as JPEG, PNG, WebP, or AVIF.',
   },
   {
-    question: 'How much can I compress?',
-    answer: 'Compression ratios vary by image content and format. Typically you can expect 30–80% file size reduction. Converting PNG to WebP or AVIF often yields the greatest savings without visible quality loss.',
+    question: 'How much compression can I expect?',
+    answer: 'Typically 30\u201380% file size reduction depending on the image. Converting PNG to WebP or AVIF often yields the best results without visible quality loss.',
   },
   {
-    question: 'Is there a file size limit?',
-    answer: 'There are no server-side limits since everything runs locally. The practical limit is your device\'s available memory. Most modern devices can handle images up to 50 MB or more without issues.',
+    question: 'Is there a file size or usage limit?',
+    answer: 'No server limits since everything runs locally. You can process up to 50 images per batch. The only limit is your device\u2019s memory — most modern devices handle images up to 50 MB easily.',
   },
   {
     question: 'Does it work on mobile?',
-    answer: 'Yes! CompressImg is fully responsive and works on modern mobile browsers. Processing is handled by Web Workers, so it won\'t freeze your browser UI even on mobile devices.',
+    answer: 'Yes. Fully responsive with Web Worker-based processing that won\u2019t freeze your browser UI.',
   },
   {
     question: 'Is it really free?',
-    answer: 'Yes, CompressImg is completely free with no hidden fees, no sign-up, and no watermarks. There are no limits on usage — compress as many images as you like.',
+    answer: 'Yes. No hidden fees, no sign-up, no watermarks, no limits on usage. Free forever.',
   },
 ];
 ---
 
-<section id="faq" class="px-6 md:px-12 py-16">
-  <h2 class="text-2xl md:text-3xl font-bold text-white text-center mb-12">
-    Frequently Asked <span class="text-gold">Questions</span>
-  </h2>
-  <div class="max-w-3xl mx-auto flex flex-col gap-3">
-    {faqs.map(faq => (
-      <details class="bg-bg-card border border-border rounded-xl group">
-        <summary class="flex justify-between items-center px-6 py-5 cursor-pointer list-none text-white font-medium hover:text-gold transition-colors select-none">
-          {faq.question}
-          <span class="text-gold text-xl font-light ml-4 transition-transform group-open:rotate-45">+</span>
-        </summary>
-        <p class="px-6 pb-5 text-text-secondary text-sm leading-relaxed">
-          {faq.answer}
-        </p>
-      </details>
-    ))}
+<section id="faq" class="px-6 md:px-10 py-20">
+  <div class="max-w-2xl mx-auto">
+    <div class="text-center mb-14">
+      <span class="text-gold text-xs font-semibold tracking-widest uppercase">FAQ</span>
+      <h2 class="font-display text-3xl md:text-4xl text-white mt-3">
+        Common questions
+      </h2>
+    </div>
+
+    <div class="flex flex-col gap-2">
+      {faqs.map(faq => (
+        <details class="group bg-bg-card/60 border border-border rounded-xl hover:border-border-light transition-colors">
+          <summary class="flex justify-between items-center px-6 py-5 cursor-pointer list-none select-none">
+            <span class="text-white text-[15px] font-medium group-hover:text-gold transition-colors duration-300 pr-4">
+              {faq.question}
+            </span>
+            <span class="flex-shrink-0 w-6 h-6 rounded-full border border-border flex items-center justify-center group-open:border-gold/30 group-open:bg-gold/8 transition-all duration-300">
+              <svg class="w-3 h-3 text-text-secondary group-open:text-gold group-open:rotate-45 transition-all duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            </span>
+          </summary>
+          <div class="px-6 pb-5 -mt-1">
+            <p class="text-text-secondary text-sm leading-relaxed">
+              {faq.answer}
+            </p>
+          </div>
+        </details>
+      ))}
+    </div>
   </div>
 </section>

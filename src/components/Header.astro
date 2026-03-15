@@ -1,24 +1,66 @@
 ---
 const navLinks = [
-  { label: 'Compress', href: '#tool' },
-  { label: 'Convert', href: '#tool' },
+  { label: 'Features', href: '#features' },
   { label: 'How It Works', href: '#how-it-works' },
   { label: 'FAQ', href: '#faq' },
 ];
 ---
 
-<header class="flex justify-between items-center px-6 md:px-12 py-5 border-b border-border">
-  <a href="/" class="text-xl font-bold tracking-widest text-white">
-    COMPRESS<span class="text-gold">IMG</span>
-  </a>
-  <nav class="hidden md:flex gap-8">
-    {navLinks.map(link => (
+<header id="site-header" class="fixed top-0 left-0 right-0 z-50 transition-all duration-500">
+  <div class="max-w-6xl mx-auto px-6 md:px-10 py-4 flex justify-between items-center">
+    <a href="/" class="flex items-center gap-2.5 group">
+      <div class="w-8 h-8 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center group-hover:bg-gold/15 transition-colors">
+        <svg class="w-4 h-4 text-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+        </svg>
+      </div>
+      <span class="text-lg font-bold tracking-wide text-white">
+        Compress<span class="text-gold-gradient">IMG</span>
+      </span>
+    </a>
+
+    <nav class="hidden md:flex items-center gap-8">
+      {navLinks.map(link => (
+        <a
+          href={link.href}
+          class="text-[13px] tracking-wide text-text-secondary hover:text-white transition-colors duration-300"
+        >
+          {link.label}
+        </a>
+      ))}
       <a
-        href={link.href}
-        class="text-xs tracking-wider uppercase text-text-secondary hover:text-gold transition-colors"
+        href="#tool"
+        class="text-[13px] font-semibold tracking-wide text-bg-primary bg-gold hover:bg-gold-light px-5 py-2 rounded-lg transition-all duration-300"
       >
-        {link.label}
+        Start Compressing
       </a>
-    ))}
-  </nav>
+    </nav>
+
+    <!-- Mobile menu button -->
+    <button class="md:hidden text-text-secondary hover:text-white transition-colors" aria-label="Menu">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+    </button>
+  </div>
 </header>
+
+<!-- Spacer for fixed header -->
+<div class="h-16"></div>
+
+<script>
+  const header = document.getElementById('site-header');
+  let lastScroll = 0;
+
+  window.addEventListener('scroll', () => {
+    const currentScroll = window.scrollY;
+
+    if (currentScroll > 20) {
+      header?.classList.add('glass', 'border-b', 'border-border');
+    } else {
+      header?.classList.remove('glass', 'border-b', 'border-border');
+    }
+
+    lastScroll = currentScroll;
+  }, { passive: true });
+</script>

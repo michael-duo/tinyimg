@@ -137,19 +137,19 @@ export default function ImageProcessor() {
 
       {/* ── STATE 1: Empty → full dropzone + format pills ── */}
       {!hasResults && (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-5">
           <DropZone onFiles={handleFiles} disabled={isProcessing} />
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-text-secondary text-xs">Convert to:</span>
-            <div className="flex gap-1">
+          <div className="flex items-center justify-center gap-3">
+            <span className="text-text-secondary text-xs font-medium">Output:</span>
+            <div className="flex gap-1.5 bg-bg-primary/60 border border-border rounded-xl p-1">
               {['original', ...outputFormats].map((fmt) => (
                 <button
                   key={fmt}
                   onClick={() => setFormat(fmt)}
-                  className={`text-xs px-3 py-1.5 rounded-lg transition-all duration-200 cursor-pointer ${
+                  className={`text-xs px-3.5 py-1.5 rounded-lg transition-all duration-200 cursor-pointer ${
                     format === fmt
-                      ? 'bg-gold text-bg-primary font-semibold'
-                      : 'bg-white/5 text-text-secondary hover:bg-white/10 hover:text-text-primary'
+                      ? 'bg-gold text-bg-primary font-semibold shadow-sm'
+                      : 'text-text-secondary hover:text-text-primary'
                   }`}
                 >
                   {FORMAT_LABELS[fmt] ?? fmt}

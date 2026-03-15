@@ -121,35 +121,35 @@ export default function DropZone({ onFiles, disabled = false, compact = false }:
       <div className="dropzone-inner absolute inset-0 pointer-events-none" />
       <div className="dropzone-bg" />
 
-      <div className="relative z-10 py-8 px-6 text-center select-none outline-none flex flex-col items-center gap-2">
+      <div className="relative z-10 py-10 px-6 text-center select-none outline-none flex flex-col items-center gap-3">
         {fileInput}
 
-        <div className="flex items-center gap-3">
-          <div className={`dropzone-icon p-2.5 rounded-lg transition-all duration-500 ${
-            isDragging ? 'bg-gold/15' : 'bg-white/[0.03]'
-          }`}>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className={`w-5 h-5 transition-colors duration-300 ${isDragging ? 'text-gold' : 'text-text-secondary'}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-            </svg>
-          </div>
+        <div className={`dropzone-icon w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-500 ${
+          isDragging ? 'bg-gold/15 border border-gold/30' : 'bg-white/3 border border-white/5'
+        }`}>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className={`w-5 h-5 transition-colors duration-300 ${isDragging ? 'text-gold' : 'text-text-secondary'}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+          </svg>
+        </div>
+
+        <div className="flex flex-col items-center gap-1.5">
           <p className={`text-base font-semibold tracking-tight transition-colors duration-300 ${
             isDragging ? 'text-gold' : 'text-white'
           }`}>
             {isDragging ? 'Release to compress' : 'Drop images to compress'}
           </p>
+          <p className="text-text-secondary text-sm">
+            or <span className="text-gold/80 underline underline-offset-2 decoration-gold/30">browse files</span>
+          </p>
+          <p className="text-text-secondary/40 text-xs mt-1 tracking-wide">JPEG · PNG · WebP · AVIF · GIF</p>
         </div>
-
-        <p className="text-text-secondary text-sm">
-          or <span className="text-gold/80 underline underline-offset-2 decoration-gold/30">browse files</span>
-          <span className="text-text-secondary/30 text-[11px] ml-2">· JPEG · PNG · WebP · AVIF · GIF</span>
-        </p>
       </div>
     </div>
   );

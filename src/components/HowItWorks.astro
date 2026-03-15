@@ -2,33 +2,58 @@
 const steps = [
   {
     number: '01',
-    title: 'Upload Your Images',
-    description: 'Drag and drop or click to select images. Supports JPEG, PNG, WebP, AVIF, and GIF formats. Process up to 50 files at once.',
+    title: 'Drop Your Images',
+    description: 'Drag and drop or click to select. Supports JPEG, PNG, WebP, AVIF, and GIF — up to 50 files at once.',
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>`,
   },
   {
     number: '02',
-    title: 'Configure Settings',
-    description: 'Choose your output format, quality level, and optional resize dimensions. Preview changes in real time before downloading.',
+    title: 'Auto-Optimize',
+    description: 'Our smart algorithm tests multiple quality levels and formats, then picks the smallest result automatically.',
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>`,
   },
   {
     number: '03',
-    title: 'Download Results',
-    description: 'Download individual compressed images or grab all files as a ZIP archive in one click. No sign-up required.',
+    title: 'Download & Ship',
+    description: 'Download compressed images individually or as a ZIP. No sign-up, no watermarks — just optimized files.',
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12M12 16.5V3" /></svg>`,
   },
 ];
 ---
 
-<section id="how-it-works" class="px-6 md:px-12 py-16">
-  <h2 class="text-2xl md:text-3xl font-bold text-white text-center mb-12">
-    How It <span class="text-gold">Works</span>
-  </h2>
-  <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-    {steps.map(step => (
-      <div class="bg-bg-card border border-border rounded-2xl p-8 flex flex-col gap-4 hover:border-gold transition-colors">
-        <span class="text-4xl font-extrabold text-gold opacity-60">{step.number}</span>
-        <h3 class="text-lg font-semibold text-white">{step.title}</h3>
-        <p class="text-text-secondary text-sm leading-relaxed">{step.description}</p>
-      </div>
-    ))}
+<section id="how-it-works" class="px-6 md:px-10 py-20">
+  <div class="max-w-5xl mx-auto">
+    <div class="text-center mb-14">
+      <span class="text-gold text-xs font-semibold tracking-widest uppercase">Simple Workflow</span>
+      <h2 class="font-display text-3xl md:text-4xl text-white mt-3">
+        Three steps. That's it.
+      </h2>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-6">
+      {steps.map((step, i) => (
+        <div class="relative group">
+          {/* Connector line between steps */}
+          {i < steps.length - 1 && (
+            <div class="hidden md:block absolute top-12 left-[calc(50%+40px)] right-[-calc(50%-40px)] h-px bg-gradient-to-r from-border-light to-transparent z-0" style={`width: calc(100% - 40px); left: calc(50% + 20px);`}></div>
+          )}
+
+          <div class="relative z-10 flex flex-col items-center text-center gap-5 p-8">
+            {/* Step icon */}
+            <div class="relative">
+              <div class="w-16 h-16 rounded-2xl bg-bg-card border border-border flex items-center justify-center text-gold group-hover:border-gold/30 transition-colors duration-400">
+                <Fragment set:html={step.icon} />
+              </div>
+              <span class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-gold text-bg-primary text-[11px] font-bold flex items-center justify-center">
+                {step.number}
+              </span>
+            </div>
+
+            <h3 class="text-white font-semibold text-base">{step.title}</h3>
+            <p class="text-text-secondary text-sm leading-relaxed max-w-[260px]">{step.description}</p>
+          </div>
+        </div>
+      ))}
+    </div>
   </div>
 </section>

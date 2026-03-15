@@ -1,24 +1,42 @@
 ---
-const badges = [
-  '🔒 100% Client-Side',
-  '⚡ Web Worker Powered',
-  '📦 Bulk Processing',
-  '🔄 Format Convert',
+const stats = [
+  { value: '100%', label: 'Private' },
+  { value: '0', label: 'Server Uploads' },
+  { value: '5+', label: 'Formats' },
+  { value: 'Free', label: 'Forever' },
 ];
 ---
 
-<section class="text-center px-6 md:px-12 pt-16 pb-8">
-  <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-3">
-    Compress Images <span class="text-gold">Instantly</span>
-  </h1>
-  <p class="text-text-secondary text-base md:text-lg max-w-xl mx-auto leading-relaxed mb-5">
-    Free, fast, and private. Compress, convert, and resize your images directly in your browser. No uploads to any server.
-  </p>
-  <div class="flex flex-wrap gap-3 justify-center">
-    {badges.map(badge => (
-      <span class="bg-bg-card border border-border rounded-full px-4 py-1.5 text-xs text-text-secondary tracking-wide">
-        {badge}
-      </span>
-    ))}
+<section class="relative overflow-hidden">
+  <!-- Ambient glow -->
+  <div class="hero-glow"></div>
+
+  <div class="relative z-10 max-w-4xl mx-auto text-center px-6 md:px-10 pt-20 pb-12">
+    <!-- Eyebrow -->
+    <div class="fade-up inline-flex items-center gap-2 bg-gold/8 border border-gold/15 rounded-full px-4 py-1.5 mb-8">
+      <span class="w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></span>
+      <span class="text-gold text-xs font-medium tracking-wide">100% Client-Side Processing</span>
+    </div>
+
+    <!-- Main heading with serif display -->
+    <h1 class="fade-up fade-up-delay-1 font-display text-5xl md:text-6xl lg:text-7xl text-white leading-[1.1] mb-6">
+      Compress Your Images<br />
+      <span class="text-gold-gradient">Without Compromise</span>
+    </h1>
+
+    <p class="fade-up fade-up-delay-2 text-text-secondary text-lg md:text-xl max-w-2xl mx-auto leading-relaxed mb-10">
+      Free, fast, and completely private. Your images never leave your device.
+      Compress, convert, and resize — all in your browser.
+    </p>
+
+    <!-- Trust stats -->
+    <div class="fade-up fade-up-delay-3 flex items-center justify-center gap-8 md:gap-12">
+      {stats.map((stat, i) => (
+        <div class="flex flex-col items-center gap-1">
+          <span class="text-white font-bold text-xl md:text-2xl">{stat.value}</span>
+          <span class="text-text-secondary text-xs tracking-wide">{stat.label}</span>
+        </div>
+      ))}
+    </div>
   </div>
 </section>

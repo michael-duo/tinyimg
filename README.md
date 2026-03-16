@@ -1,8 +1,10 @@
-# compressimg
+# TinyIMG
 
 A fast, privacy-first image compression tool that runs entirely in the browser. No uploads, no servers — your images never leave your device.
 
-![compressimg screenshot](docs/screenshot.png)
+**[tinyimg.michaelit.dev](https://tinyimg.michaelit.dev)**
+
+![TinyIMG screenshot](docs/screenshot.png)
 
 ---
 
@@ -46,7 +48,7 @@ npm run preview    # preview the production build locally
 
 ## How It Works
 
-compressimg is a fully static site (Astro SSG) with a single React island for the interactive compression UI.
+TinyIMG is a fully static site (Astro SSG) with a single React island for the interactive compression UI.
 
 **Architecture:**
 

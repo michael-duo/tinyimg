@@ -1,0 +1,26 @@
+# TinyIMG
+
+> Free, private image compression tool that runs entirely in your browser.
+
+TinyIMG is a client-side image compression, conversion, and resizing tool. No images are uploaded to any server — all processing happens locally using Web Workers and OffscreenCanvas.
+
+## Features
+
+- Compress JPEG, PNG, WebP, AVIF, and GIF images
+- Convert between formats (JPEG, PNG, WebP, AVIF)
+- Smart compression: automatically tests multiple quality levels and formats, picks the smallest result
+- Bulk processing: up to 50 images at once
+- Download individually or as a ZIP file
+- 100% free, no sign-up, no watermarks
+
+## Technical Details
+
+- Built with Astro, React, and Tailwind CSS
+- Uses Web Workers for off-main-thread processing
+- Uses OffscreenCanvas and convertToBlob() for compression
+- Static site deployed on Cloudflare Pages
+- Zero server-side processing
+
+## Links
+
+- Website: https://tinyimg.michaelit.dev

@@ -2,7 +2,7 @@
 const faqs = [
   {
     question: 'Is my data safe?',
-    answer: 'Absolutely. CompressImg runs entirely in your browser using Web Workers. Your images are never uploaded to any server — all processing happens locally on your device.',
+    answer: 'Absolutely. TinyIMG runs entirely in your browser using Web Workers. Your images are never uploaded to any server — all processing happens locally on your device.',
   },
   {
     question: 'What image formats are supported?',
@@ -26,6 +26,19 @@ const faqs = [
   },
 ];
 ---
+
+<script type="application/ld+json" set:html={JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": faqs.map(faq => ({
+    "@type": "Question",
+    "name": faq.question,
+    "acceptedAnswer": {
+      "@type": "Answer",
+      "text": faq.answer,
+    },
+  })),
+})} />
 
 <section id="faq" class="px-6 md:px-10 py-20">
   <div class="max-w-2xl mx-auto">

@@ -1,0 +1,16 @@
+{
+  "name": "TinyIMG — Free Image Compressor",
+  "short_name": "TinyIMG",
+  "description": "Compress, convert, and resize images in your browser. Free, fast, and private.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#c9a84c",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

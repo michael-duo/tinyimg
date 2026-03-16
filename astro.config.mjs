@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import sitemap from '@astrojs/sitemap';
 
 export default defineConfig({
-  site: 'https://compressimg.pages.dev',
+  site: 'https://tinyimg.michaelit.dev',
   integrations: [react(), sitemap()],
   output: 'static',
   vite: {

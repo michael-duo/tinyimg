@@ -7,7 +7,7 @@ interface Props {
 }
 
 const {
-  title = "CompressImg — Free Online Image Compressor | No Upload Required",
+  title = "TinyIMG — Free Image Compressor & Converter",
   description = "Compress, convert, and resize images instantly in your browser. Free, fast, and private — no data leaves your device. Supports JPEG, PNG, WebP, AVIF, GIF.",
 } = Astro.props;
 
@@ -21,6 +21,8 @@ const ogImage = new URL("/og-image.png", Astro.site);
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#c9a84c" />
     <link rel="canonical" href={canonicalURL} />
 
     <title>{title}</title>
@@ -41,7 +43,7 @@ const ogImage = new URL("/og-image.png", Astro.site);
     <script type="application/ld+json" set:html={JSON.stringify({
       "@context": "https://schema.org",
       "@type": "WebApplication",
-      "name": "CompressImg",
+      "name": "TinyIMG",
       "url": canonicalURL,
       "description": description,
       "applicationCategory": "MultimediaApplication",
@@ -49,6 +51,9 @@ const ogImage = new URL("/og-image.png", Astro.site);
       "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
       "browserRequirements": "Requires a modern browser with Web Worker and OffscreenCanvas support",
     })} />
+
+    <!-- Cloudflare Web Analytics -->
+    <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": ""}'></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

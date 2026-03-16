@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://compressimg.pages.dev/sitemap-index.xml
+Sitemap: https://tinyimg.michaelit.dev/sitemap-index.xml

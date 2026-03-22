@@ -278,26 +278,89 @@ export default function BackgroundRemover() {
 
   // ── Loading / Processing state ──
   if (stage === 'loading' || stage === 'processing') {
+    const isDownloading = progressText.toLowerCase().includes('download') || progressText.toLowerCase().includes('model');
+    const modelLoaded = stage === 'processing';
+    const steps = [
+      { label: 'Loading AI model', done: modelLoaded, active: !modelLoaded },
+      { label: 'Removing background', done: false, active: modelLoaded },
+      { label: 'Optimizing output', done: false, active: false },
+    ];
+
     return (
       <div className="w-full max-w-2xl mx-auto">
-        <div className="rounded-xl border border-border bg-bg-card p-8 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="progress-ring w-10 h-10 rounded-full border-3 border-gold/20 border-t-gold" />
+        <div className="rounded-xl border border-border bg-bg-card p-8">
+          {/* Animated icon */}
+          <div className="flex justify-center mb-6">
+            <div className="relative w-16 h-16">
+              <svg className="w-16 h-16 progress-ring" viewBox="0 0 64 64">
+                <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(201,168,76,0.1)" strokeWidth="3" />
+                <circle cx="32" cy="32" r="28" fill="none" stroke="#c9a84c" strokeWidth="3" strokeDasharray="120 56" strokeLinecap="round" />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <svg className="w-6 h-6 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+                </svg>
+              </div>
+            </div>
           </div>
-          <p className="text-text-primary text-sm font-medium mb-2">{progressText}</p>
-          <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">
+
+          {/* Status text */}
+          <p className="text-text-primary text-sm font-semibold text-center mb-1">
+            {stage === 'loading' ? 'Preparing AI model...' : 'Removing background...'}
+          </p>
+          <p className="text-text-secondary text-xs text-center mb-5">
+            {isDownloading
+              ? 'Downloading model for the first time — this only happens once'
+              : 'AI is analyzing your image — almost there'}
+          </p>
+
+          {/* Progress bar */}
+          <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden mb-4">
             <div
-              className="h-full bg-gold rounded-full transition-all duration-300"
-              style={{ width: `${progress}%` }}
+              className="h-full bg-gradient-to-r from-gold/80 to-gold rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${Math.max(progress, 3)}%` }}
             />
           </div>
-          <p className="text-text-secondary text-xs mt-2">{progress}%</p>
-          <button
-            onClick={handleClear}
-            className="mt-4 text-xs px-3 py-2 rounded-lg bg-white/5 hover:bg-white/8 text-text-primary cursor-pointer transition-all"
-          >
-            Cancel
-          </button>
+
+          {/* Step indicators */}
+          <div className="flex items-center justify-center gap-6 mb-5">
+            {steps.map((step, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <div className={`w-1.5 h-1.5 rounded-full ${
+                  step.done ? 'bg-success' : step.active ? 'bg-gold animate-pulse' : 'bg-white/10'
+                }`} />
+                <span className={`text-[11px] ${
+                  step.done ? 'text-success' : step.active ? 'text-text-primary' : 'text-text-secondary/40'
+                }`}>
+                  {step.label}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Helpful tip */}
+          <div className="bg-gold/5 border border-gold/10 rounded-lg px-4 py-3 mb-4">
+            <p className="text-xs text-text-secondary text-center">
+              {isDownloading ? (
+                <>
+                  <span className="text-gold font-medium">First time only</span> — the AI model (~5 MB) is being cached in your browser. Next time it will load instantly.
+                </>
+              ) : (
+                <>
+                  <span className="text-gold font-medium">100% private</span> — your image never leaves your device. All processing happens right here in your browser.
+                </>
+              )}
+            </p>
+          </div>
+
+          <div className="flex justify-center">
+            <button
+              onClick={handleClear}
+              className="text-xs px-4 py-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-white/5 cursor-pointer transition-all"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
     );

@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 
 interface DropZoneProps {
   onFiles: (files: File[]) => void;
@@ -58,6 +58,28 @@ export default function DropZone({ onFiles, disabled = false, compact = false }:
       e.target.value = '';
     }
   };
+
+  // Paste from clipboard (Ctrl+V / Cmd+V)
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (disabled) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const imageFiles: File[] = [];
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) imageFiles.push(file);
+        }
+      }
+      if (imageFiles.length > 0) {
+        e.preventDefault();
+        onFiles(imageFiles);
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [disabled, onFiles]);
 
   const sharedProps = {
     onDragEnter: handleDragEnter,
@@ -146,7 +168,7 @@ export default function DropZone({ onFiles, disabled = false, compact = false }:
             {isDragging ? 'Release to compress' : 'Drop images to compress'}
           </p>
           <p className="text-text-secondary text-sm">
-            or <span className="text-gold/80 underline underline-offset-2 decoration-gold/30">browse files</span>
+            or <span className="text-gold/80 underline underline-offset-2 decoration-gold/30">browse files</span> · <span className="text-text-secondary/60">paste from clipboard</span>
           </p>
           <p className="text-text-secondary/40 text-xs mt-1 tracking-wide">JPEG · PNG · WebP · AVIF · GIF</p>
         </div>

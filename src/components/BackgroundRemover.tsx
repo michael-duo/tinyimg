@@ -121,6 +121,45 @@ export default function BackgroundRemover() {
     });
   };
 
+  // Downscale large images in a Worker before sending to bg removal (reduces main-thread blocking)
+  const downscaleForModel = useCallback(async (file: File, maxSize = 1024): Promise<File> => {
+    return new Promise((resolve) => {
+      const worker = new Worker(
+        new URL('../workers/edit-worker.ts', import.meta.url),
+        { type: 'module' }
+      );
+      // Check if we need to resize
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const { naturalWidth: w, naturalHeight: h } = img;
+        if (w <= maxSize && h <= maxSize) {
+          resolve(file); // Already small enough
+          return;
+        }
+        const scale = maxSize / Math.max(w, h);
+        const tw = Math.round(w * scale);
+        const th = Math.round(h * scale);
+        worker.onmessage = (e) => {
+          worker.terminate();
+          if (e.data.type === 'result') {
+            resolve(new File([e.data.blob], file.name, { type: 'image/png' }));
+          } else {
+            resolve(file); // fallback to original
+          }
+        };
+        worker.onerror = () => { worker.terminate(); resolve(file); };
+        worker.postMessage({
+          type: 'edit', blob: file, mimeType: 'image/png',
+          operation: 'resize', params: { targetWidth: tw, targetHeight: th },
+        });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
+  }, []);
+
   const processSingleImage = useCallback(async (file: File, id: string): Promise<void> => {
     setResults((prev) => prev.map((r) => r.id === id ? { ...r, status: 'processing' } : r));
 
@@ -137,7 +176,13 @@ export default function BackgroundRemover() {
 
       if (abortRef.current) return;
 
-      const blob: Blob = await removeBackground(file, {
+      // Downscale large images off-main-thread to reduce UI blocking
+      const processFile = await downscaleForModel(file);
+
+      // Yield to browser before heavy work
+      await new Promise((r) => setTimeout(r, 0));
+
+      const blob: Blob = await removeBackground(processFile, {
         progress: () => {
           // Progress is per-image; for batch we just show status
         },

@@ -52,6 +52,22 @@ export default function BackgroundRemover() {
     };
   }, [revokeUrls]);
 
+  // Preload the AI model in background as soon as the page loads
+  const modelRef = useRef<{ removeBackground: typeof import('@imgly/background-removal')['removeBackground'] } | null>(null);
+  const [modelReady, setModelReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    import('@imgly/background-removal').then((mod) => {
+      if (cancelled) return;
+      modelRef.current = { removeBackground: mod.removeBackground };
+      setModelReady(true);
+    }).catch(() => {
+      // Will retry when user uploads
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   // Check IndexedDB on mount for transferred image
   useEffect(() => {
     let cancelled = false;
@@ -77,7 +93,15 @@ export default function BackgroundRemover() {
     revokeUrls();
 
     try {
-      const { removeBackground } = await import('@imgly/background-removal');
+      // Use preloaded model if ready, otherwise import fresh
+      let removeBackground: typeof import('@imgly/background-removal')['removeBackground'];
+      if (modelRef.current) {
+        removeBackground = modelRef.current.removeBackground;
+      } else {
+        const mod = await import('@imgly/background-removal');
+        removeBackground = mod.removeBackground;
+        modelRef.current = { removeBackground };
+      }
 
       if (abortRef.current) return;
       setStage('processing');
@@ -272,6 +296,13 @@ export default function BackgroundRemover() {
     return (
       <div className="w-full max-w-2xl mx-auto">
         <DropZone onFiles={handleFiles} />
+        <p className="text-center text-xs mt-3 text-text-secondary/50">
+          {modelReady ? (
+            <span className="text-success/70">AI model ready</span>
+          ) : (
+            <span>Loading AI model in background...</span>
+          )}
+        </p>
       </div>
     );
   }

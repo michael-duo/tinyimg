@@ -41,6 +41,17 @@ export default function ImageProcessor() {
   const workerRef = useRef<Worker | null>(null);
   const hasResults = results.length > 0;
 
+  // Warn user before navigating away with undownloaded results
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (results.some((r) => r.status === 'done')) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [results]);
+
   useEffect(() => {
     detectOutputFormats().then(setOutputFormats);
   }, []);

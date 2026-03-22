@@ -2,24 +2,24 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import DropZone from './DropZone';
 import { getImage, setImage, clearImage } from '../lib/image-transfer';
 import type { TransferImage } from '../lib/image-transfer';
-import { downloadSingle } from '../lib/download';
+import { downloadSingle, downloadAll, getCompressedFilename } from '../lib/download';
 import type { ResultMessage, ErrorMessage } from '../workers/image-worker';
 
-type Stage = 'idle' | 'loading' | 'processing' | 'done' | 'error';
-
-interface RemovalResult {
-  originalUrl: string;
-  resultPngUrl: string;
-  resultWebpUrl: string | null;
-  resultPngBlob: Blob;
-  resultWebpBlob: Blob | null;
-  originalName: string;
-  originalSize: number;
-  pngSize: number;
-  webpSize: number | null;
-  width: number;
-  height: number;
+interface BgResult {
+  id: string;
+  originalFile: File;
+  status: 'pending' | 'processing' | 'done' | 'error';
+  error?: string;
+  originalUrl?: string;
+  pngBlob?: Blob;
+  webpBlob?: Blob;
+  pngUrl?: string;
+  webpUrl?: string;
+  width?: number;
+  height?: number;
 }
+
+let bgResultCounter = 0;
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -28,17 +28,14 @@ function formatBytes(bytes: number): string {
 }
 
 export default function BackgroundRemover() {
-  const [stage, setStage] = useState<Stage>('idle');
-  const [progress, setProgress] = useState(0);
-  const [progressText, setProgressText] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
-  const [result, setResult] = useState<RemovalResult | null>(null);
+  const [results, setResults] = useState<BgResult[]>([]);
   const [sliderPos, setSliderPos] = useState(50);
 
   const sliderRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
   const urlsRef = useRef<string[]>([]);
   const abortRef = useRef(false);
+  const processingRef = useRef(false);
 
   // Revoke object URLs on unmount or clear
   const revokeUrls = useCallback(() => {
@@ -75,110 +72,13 @@ export default function BackgroundRemover() {
       if (cancelled || !img) return;
       clearImage();
       const file = new File([img.blob], img.name, { type: img.mimeType });
-      processImage(file);
+      handleFiles([file]);
     });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const processImage = useCallback(async (file: File) => {
-    abortRef.current = false;
-    setStage('loading');
-    setProgress(0);
-    setProgressText('Loading background removal model...');
-    setErrorMsg('');
-    setResult(null);
-    revokeUrls();
-
-    try {
-      // Use preloaded model if ready, otherwise import fresh
-      let removeBackground: typeof import('@imgly/background-removal')['removeBackground'];
-      if (modelRef.current) {
-        removeBackground = modelRef.current.removeBackground;
-      } else {
-        const mod = await import('@imgly/background-removal');
-        removeBackground = mod.removeBackground;
-        modelRef.current = { removeBackground };
-      }
-
-      if (abortRef.current) return;
-      setStage('processing');
-      setProgressText('Removing background...');
-
-      const blob: Blob = await removeBackground(file, {
-        progress: (key: string, current: number, total: number) => {
-          if (abortRef.current) return;
-          const pct = total > 0 ? Math.round((current / total) * 100) : 0;
-          setProgress(pct);
-
-          if (key.includes('download') || key.includes('fetch')) {
-            setProgressText(`Downloading model... ${pct}%`);
-          } else if (key.includes('compute') || key.includes('inference')) {
-            setProgressText(`Processing image... ${pct}%`);
-          } else {
-            setProgressText(`Working... ${pct}%`);
-          }
-        },
-      });
-
-      if (abortRef.current) return;
-
-      // Create original preview URL
-      const originalUrl = URL.createObjectURL(file);
-      urlsRef.current.push(originalUrl);
-
-      // The result is a PNG blob
-      const resultPngBlob = blob;
-      const resultPngUrl = URL.createObjectURL(resultPngBlob);
-      urlsRef.current.push(resultPngUrl);
-
-      // Get dimensions
-      const img = new Image();
-      const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
-        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-        img.onerror = () => reject(new Error('Failed to read image dimensions'));
-        img.src = resultPngUrl;
-      });
-
-      // Auto-compress to WebP via existing worker
-      let resultWebpBlob: Blob | null = null;
-      let resultWebpUrl: string | null = null;
-
-      try {
-        const webpBlob = await compressWithWorker(resultPngBlob, file.name);
-        if (webpBlob && webpBlob.type === 'image/webp') {
-          resultWebpBlob = webpBlob;
-          resultWebpUrl = URL.createObjectURL(webpBlob);
-          urlsRef.current.push(resultWebpUrl);
-        }
-      } catch {
-        // WebP compression failed, that's okay — we still have PNG
-      }
-
-      if (abortRef.current) return;
-
-      setResult({
-        originalUrl,
-        resultPngUrl,
-        resultWebpUrl,
-        resultPngBlob,
-        resultWebpBlob,
-        originalName: file.name,
-        originalSize: file.size,
-        pngSize: resultPngBlob.size,
-        webpSize: resultWebpBlob?.size ?? null,
-        width: dims.width,
-        height: dims.height,
-      });
-      setStage('done');
-    } catch (err) {
-      if (abortRef.current) return;
-      setErrorMsg(err instanceof Error ? err.message : 'Background removal failed');
-      setStage('error');
-    }
-  }, [revokeUrls]);
 
   const compressWithWorker = (pngBlob: Blob, originalName: string): Promise<Blob | null> => {
     return new Promise((resolve, reject) => {
@@ -211,53 +111,159 @@ export default function BackgroundRemover() {
     });
   };
 
+  const processSingleImage = useCallback(async (file: File, id: string): Promise<void> => {
+    setResults((prev) => prev.map((r) => r.id === id ? { ...r, status: 'processing' } : r));
+
+    try {
+      // Use preloaded model if ready, otherwise import fresh
+      let removeBackground: typeof import('@imgly/background-removal')['removeBackground'];
+      if (modelRef.current) {
+        removeBackground = modelRef.current.removeBackground;
+      } else {
+        const mod = await import('@imgly/background-removal');
+        removeBackground = mod.removeBackground;
+        modelRef.current = { removeBackground };
+      }
+
+      if (abortRef.current) return;
+
+      const blob: Blob = await removeBackground(file, {
+        progress: () => {
+          // Progress is per-image; for batch we just show status
+        },
+      });
+
+      if (abortRef.current) return;
+
+      // Create original preview URL
+      const originalUrl = URL.createObjectURL(file);
+      urlsRef.current.push(originalUrl);
+
+      // The result is a PNG blob
+      const pngBlob = blob;
+      const pngUrl = URL.createObjectURL(pngBlob);
+      urlsRef.current.push(pngUrl);
+
+      // Get dimensions
+      const img = new Image();
+      const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        img.onerror = () => reject(new Error('Failed to read image dimensions'));
+        img.src = pngUrl;
+      });
+
+      // Auto-compress to WebP via existing worker
+      let webpBlob: Blob | null = null;
+      let webpUrl: string | null = null;
+
+      try {
+        const compressed = await compressWithWorker(pngBlob, file.name);
+        if (compressed && compressed.type === 'image/webp') {
+          webpBlob = compressed;
+          webpUrl = URL.createObjectURL(compressed);
+          urlsRef.current.push(webpUrl);
+        }
+      } catch {
+        // WebP compression failed, that's okay — we still have PNG
+      }
+
+      if (abortRef.current) return;
+
+      setResults((prev) => prev.map((r) => r.id === id ? {
+        ...r,
+        status: 'done' as const,
+        originalUrl,
+        pngBlob,
+        pngUrl,
+        webpBlob: webpBlob ?? undefined,
+        webpUrl: webpUrl ?? undefined,
+        width: dims.width,
+        height: dims.height,
+      } : r));
+    } catch (err) {
+      if (abortRef.current) return;
+      setResults((prev) => prev.map((r) => r.id === id ? {
+        ...r,
+        status: 'error' as const,
+        error: err instanceof Error ? err.message : 'Background removal failed',
+      } : r));
+    }
+  }, []);
+
+  const processQueue = useCallback(async (newEntries: BgResult[]) => {
+    if (processingRef.current) return;
+    processingRef.current = true;
+
+    for (const entry of newEntries) {
+      if (abortRef.current) break;
+      await processSingleImage(entry.originalFile, entry.id);
+    }
+
+    processingRef.current = false;
+  }, [processSingleImage]);
+
   const handleFiles = useCallback(
     (files: File[]) => {
-      const file = files[0];
-      if (!file) return;
       const validTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/avif', 'image/gif'];
-      if (!validTypes.includes(file.type)) return;
-      processImage(file);
+      const valid = files.filter((f) => validTypes.includes(f.type));
+      if (valid.length === 0) return;
+
+      abortRef.current = false;
+
+      const newEntries: BgResult[] = valid.map((file) => ({
+        id: String(++bgResultCounter),
+        originalFile: file,
+        status: 'pending' as const,
+      }));
+
+      setResults((prev) => [...prev, ...newEntries]);
+      processQueue(newEntries);
     },
-    [processImage]
+    [processQueue]
   );
 
   const handleClear = useCallback(() => {
     abortRef.current = true;
+    processingRef.current = false;
     revokeUrls();
-    setResult(null);
-    setStage('idle');
-    setProgress(0);
-    setProgressText('');
-    setErrorMsg('');
+    setResults([]);
     setSliderPos(50);
   }, [revokeUrls]);
 
-  const handleDownloadPng = useCallback(() => {
-    if (!result) return;
-    downloadSingle(result.resultPngBlob, result.originalName, 'image/png', 'nobg');
-  }, [result]);
+  const handleDownloadPng = useCallback((r: BgResult) => {
+    if (!r.pngBlob) return;
+    downloadSingle(r.pngBlob, r.originalFile.name, 'image/png', 'nobg');
+  }, []);
 
-  const handleDownloadWebp = useCallback(() => {
-    if (!result?.resultWebpBlob) return;
-    downloadSingle(result.resultWebpBlob, result.originalName, 'image/webp', 'nobg');
-  }, [result]);
+  const handleDownloadWebp = useCallback((r: BgResult) => {
+    if (!r.webpBlob) return;
+    downloadSingle(r.webpBlob, r.originalFile.name, 'image/webp', 'nobg');
+  }, []);
+
+  const handleDownloadAll = useCallback(async () => {
+    const doneResults = results.filter((r) => r.status === 'done' && r.pngBlob);
+    const files = doneResults.map((r) => ({
+      blob: r.pngBlob!,
+      filename: getCompressedFilename(r.originalFile.name, 'image/png', 'nobg'),
+    }));
+    await downloadAll(files);
+  }, [results]);
 
   const handleTransfer = useCallback(
-    async (target: 'edit' | 'compress') => {
-      if (!result) return;
+    async (r: BgResult, target: 'edit' | 'compress') => {
+      if (!r.pngBlob || !r.width || !r.height) return;
       const data: TransferImage = {
-        blob: result.resultPngBlob,
-        name: result.originalName,
+        blob: r.pngBlob,
+        name: r.originalFile.name,
         mimeType: 'image/png',
-        width: result.width,
-        height: result.height,
+        width: r.width,
+        height: r.height,
         from: 'remove-bg',
       };
       await setImage(data);
       window.location.href = target === 'edit' ? '/edit' : '/';
     },
-    [result]
+    []
   );
 
   // Slider drag logic
@@ -291,8 +297,15 @@ export default function BackgroundRemover() {
     draggingRef.current = false;
   }, []);
 
+  // Derived state
+  const isProcessing = results.some((r) => r.status === 'processing' || r.status === 'pending');
+  const doneCount = results.filter((r) => r.status === 'done').length;
+  const totalCount = results.length;
+  const isSingleDone = results.length === 1 && results[0].status === 'done';
+  const singleResult = isSingleDone ? results[0] : null;
+
   // ── Idle state ──
-  if (stage === 'idle') {
+  if (results.length === 0) {
     return (
       <div className="w-full max-w-2xl mx-auto">
         <DropZone onFiles={handleFiles} />
@@ -307,247 +320,297 @@ export default function BackgroundRemover() {
     );
   }
 
-  // ── Loading / Processing state ──
-  if (stage === 'loading' || stage === 'processing') {
-    const isDownloading = progressText.toLowerCase().includes('download') || progressText.toLowerCase().includes('model');
-    const modelLoaded = stage === 'processing';
-    const steps = [
-      { label: 'Loading AI model', done: modelLoaded, active: !modelLoaded },
-      { label: 'Removing background', done: false, active: modelLoaded },
-      { label: 'Optimizing output', done: false, active: false },
-    ];
-
+  // ── Single image done → beautiful before/after slider ──
+  if (singleResult && singleResult.pngUrl && singleResult.originalUrl) {
+    const r = singleResult;
     return (
-      <div className="w-full max-w-2xl mx-auto">
-        <div className="rounded-xl border border-border bg-bg-card p-8">
-          {/* Animated icon */}
-          <div className="flex justify-center mb-6">
-            <div className="relative w-16 h-16">
-              <svg className="w-16 h-16 progress-ring" viewBox="0 0 64 64">
-                <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(201,168,76,0.1)" strokeWidth="3" />
-                <circle cx="32" cy="32" r="28" fill="none" stroke="#c9a84c" strokeWidth="3" strokeDasharray="120 56" strokeLinecap="round" />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <svg className="w-6 h-6 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
-                </svg>
-              </div>
-            </div>
-          </div>
+      <div className="w-full max-w-2xl mx-auto space-y-4">
+        {/* Before/After Slider */}
+        <div
+          ref={sliderRef}
+          className="relative w-full rounded-xl border border-border bg-bg-card overflow-hidden select-none touch-none cursor-ew-resize"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+        >
+          {/* Checkerboard background for transparency */}
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage:
+                'linear-gradient(45deg, #1a1a1a 25%, transparent 25%), linear-gradient(-45deg, #1a1a1a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1a1a1a 75%), linear-gradient(-45deg, transparent 75%, #1a1a1a 75%)',
+              backgroundSize: '16px 16px',
+              backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+            }}
+          />
 
-          {/* Status text */}
-          <p className="text-text-primary text-sm font-semibold text-center mb-1">
-            {stage === 'loading' ? 'Preparing AI model...' : 'Removing background...'}
-          </p>
-          <p className="text-text-secondary text-xs text-center mb-5">
-            {isDownloading
-              ? 'Downloading model for the first time — this only happens once'
-              : 'AI is analyzing your image — almost there'}
-          </p>
+          {/* Result (after) — full width behind */}
+          <img
+            src={r.pngUrl}
+            alt="Background removed"
+            className="relative w-full h-auto block"
+            draggable={false}
+          />
 
-          {/* Progress bar */}
-          <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden mb-4">
-            <div
-              className="h-full bg-gradient-to-r from-gold/80 to-gold rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${Math.max(progress, 3)}%` }}
+          {/* Original (before) — clipped */}
+          <div
+            className="absolute inset-0"
+            style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}
+          >
+            <img
+              src={r.originalUrl}
+              alt="Original"
+              className="w-full h-auto block"
+              draggable={false}
             />
           </div>
 
-          {/* Step indicators */}
-          <div className="flex items-center justify-center gap-6 mb-5">
-            {steps.map((step, i) => (
-              <div key={i} className="flex items-center gap-1.5">
-                <div className={`w-1.5 h-1.5 rounded-full ${
-                  step.done ? 'bg-success' : step.active ? 'bg-gold animate-pulse' : 'bg-white/10'
-                }`} />
-                <span className={`text-[11px] ${
-                  step.done ? 'text-success' : step.active ? 'text-text-primary' : 'text-text-secondary/40'
-                }`}>
-                  {step.label}
-                </span>
+          {/* Slider line */}
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-white/80 pointer-events-none"
+            style={{ left: `${sliderPos}%`, transform: 'translateX(-50%)' }}
+          >
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 shadow-lg flex items-center justify-center">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-bg-primary">
+                <path d="M4 3L1 7L4 11M10 3L13 7L10 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Labels */}
+          <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wider bg-black/60 text-white px-2 py-0.5 rounded">
+            Before
+          </span>
+          <span className="absolute top-2 right-2 text-[10px] font-bold uppercase tracking-wider bg-black/60 text-white px-2 py-0.5 rounded">
+            After
+          </span>
+        </div>
+
+        {/* Stats */}
+        <div className="rounded-xl border border-border bg-bg-card p-4">
+          <div className="flex items-center justify-between text-xs text-text-secondary mb-3">
+            <span>
+              {r.width} x {r.height}px
+            </span>
+            <span>Original: {formatBytes(r.originalFile.size)}</span>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-text-primary">PNG</span>
+                <span className="text-xs text-text-secondary">{r.pngBlob ? formatBytes(r.pngBlob.size) : ''}</span>
               </div>
-            ))}
-          </div>
+              <button
+                onClick={() => handleDownloadPng(r)}
+                className="btn-shine bg-gold hover:bg-gold-light text-bg-primary text-xs font-bold px-4 py-2 rounded-md cursor-pointer transition-all"
+              >
+                Download PNG
+              </button>
+            </div>
 
-          {/* Helpful tip */}
-          <div className="bg-gold/5 border border-gold/10 rounded-lg px-4 py-3 mb-4">
-            <p className="text-xs text-text-secondary text-center">
-              {isDownloading ? (
-                <>
-                  <span className="text-gold font-medium">First time only</span> — the AI model (~5 MB) is being cached in your browser. Next time it will load instantly.
-                </>
-              ) : (
-                <>
-                  <span className="text-gold font-medium">100% private</span> — your image never leaves your device. All processing happens right here in your browser.
-                </>
-              )}
-            </p>
-          </div>
-
-          <div className="flex justify-center">
-            <button
-              onClick={handleClear}
-              className="text-xs px-4 py-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-white/5 cursor-pointer transition-all"
-            >
-              Cancel
-            </button>
+            {r.webpBlob && (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-text-primary">WebP</span>
+                  <span className="text-xs text-text-secondary">{formatBytes(r.webpBlob.size)}</span>
+                  {r.pngBlob && r.webpBlob.size < r.pngBlob.size && (
+                    <span className="text-xs text-success">
+                      {Math.round((1 - r.webpBlob.size / r.pngBlob.size) * 100)}% smaller
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleDownloadWebp(r)}
+                  className="btn-shine bg-gold hover:bg-gold-light text-bg-primary text-xs font-bold px-4 py-2 rounded-md cursor-pointer transition-all"
+                >
+                  Download WebP
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      </div>
-    );
-  }
 
-  // ── Error state ──
-  if (stage === 'error') {
-    return (
-      <div className="w-full max-w-2xl mx-auto">
-        <div className="rounded-xl border border-error/30 bg-bg-card p-8 text-center">
-          <div className="text-error text-3xl mb-3">!</div>
-          <p className="text-text-primary text-sm font-medium mb-1">Background removal failed</p>
-          <p className="text-text-secondary text-xs mb-4">{errorMsg}</p>
+        {/* Actions */}
+        <div className="flex flex-wrap gap-2 justify-center">
+          <button
+            onClick={() => handleTransfer(r, 'edit')}
+            className="text-xs px-3 py-2 rounded-lg bg-white/5 hover:bg-white/8 text-text-primary cursor-pointer transition-all"
+          >
+            Send to Editor
+          </button>
+          <button
+            onClick={() => handleTransfer(r, 'compress')}
+            className="text-xs px-3 py-2 rounded-lg bg-white/5 hover:bg-white/8 text-text-primary cursor-pointer transition-all"
+          >
+            Send to Compress
+          </button>
           <button
             onClick={handleClear}
             className="text-xs px-3 py-2 rounded-lg bg-white/5 hover:bg-white/8 text-text-primary cursor-pointer transition-all"
           >
-            Try again
+            New Image
           </button>
         </div>
       </div>
     );
   }
 
-  // ── Done state ──
-  if (!result) return null;
+  // ── Multi-image / in-progress view ──
+  return (
+    <div className="w-full max-w-2xl mx-auto">
+      {/* Stats bar */}
+      <div className="flex items-center justify-between py-3 border-b border-white/5">
+        <div className="flex items-center gap-3 text-sm">
+          {isProcessing && (
+            <svg className="progress-ring w-4 h-4" viewBox="0 0 36 36">
+              <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(201,168,76,0.2)" strokeWidth="3" />
+              <circle cx="18" cy="18" r="14" fill="none" stroke="#c9a84c" strokeWidth="3" strokeDasharray="60 28" strokeLinecap="round" />
+            </svg>
+          )}
+          <span className="text-text-secondary">
+            <span className="text-white font-semibold">{doneCount}</span>/{totalCount} processed
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          {doneCount > 1 && (
+            <button
+              onClick={handleDownloadAll}
+              className="btn-shine bg-gold hover:bg-gold-light text-bg-primary text-xs font-bold px-4 py-2 rounded-md transition-all duration-200 cursor-pointer"
+            >
+              Download All
+            </button>
+          )}
+          <button
+            onClick={handleClear}
+            className="text-text-secondary/50 hover:text-error text-sm cursor-pointer transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+
+      {/* Result cards */}
+      <div className="py-1">
+        {results.map((r, i) => (
+          <BgResultCard
+            key={r.id}
+            result={r}
+            index={i}
+            onDownloadPng={handleDownloadPng}
+            onDownloadWebp={handleDownloadWebp}
+            onTransfer={handleTransfer}
+          />
+        ))}
+      </div>
+
+      {/* Add more */}
+      <DropZone onFiles={handleFiles} disabled={isProcessing} compact />
+
+      {/* Model status */}
+      {!modelReady && (
+        <p className="text-center text-xs mt-3 text-text-secondary/50">
+          Loading AI model in background...
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Individual result card for batch view ──
+interface BgResultCardProps {
+  result: BgResult;
+  index: number;
+  onDownloadPng: (r: BgResult) => void;
+  onDownloadWebp: (r: BgResult) => void;
+  onTransfer: (r: BgResult, target: 'edit' | 'compress') => void;
+}
+
+function BgResultCard({ result, index, onDownloadPng, onDownloadWebp, onTransfer }: BgResultCardProps) {
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const source = result.pngBlob ?? result.originalFile;
+    const url = URL.createObjectURL(source);
+    setThumbnailUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [result.pngBlob, result.originalFile]);
 
   return (
-    <div className="w-full max-w-2xl mx-auto space-y-4">
-      {/* Before/After Slider */}
-      <div
-        ref={sliderRef}
-        className="relative w-full rounded-xl border border-border bg-bg-card overflow-hidden select-none touch-none cursor-ew-resize"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-      >
-        {/* Checkerboard background for transparency */}
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage:
-              'linear-gradient(45deg, #1a1a1a 25%, transparent 25%), linear-gradient(-45deg, #1a1a1a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1a1a1a 75%), linear-gradient(-45deg, transparent 75%, #1a1a1a 75%)',
-            backgroundSize: '16px 16px',
-            backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
-          }}
-        />
-
-        {/* Result (after) — full width behind */}
-        <img
-          src={result.resultPngUrl}
-          alt="Background removed"
-          className="relative w-full h-auto block"
-          draggable={false}
-        />
-
-        {/* Original (before) — clipped */}
-        <div
-          className="absolute inset-0"
-          style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}
-        >
+    <div
+      className="card-enter flex items-center gap-4 py-3.5 border-b border-white/5 last:border-b-0"
+      style={{ animationDelay: `${index * 40}ms` }}
+    >
+      {/* Thumbnail */}
+      <div className={`w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-bg-primary ${result.status === 'processing' ? 'shimmer' : ''}`}>
+        {thumbnailUrl && (
           <img
-            src={result.originalUrl}
-            alt="Original"
-            className="w-full h-auto block"
-            draggable={false}
+            src={thumbnailUrl}
+            alt=""
+            className={`w-full h-full object-cover ${result.status === 'processing' ? 'opacity-40' : ''}`}
+            style={result.status === 'done' ? {
+              backgroundImage:
+                'linear-gradient(45deg, #1a1a1a 25%, transparent 25%), linear-gradient(-45deg, #1a1a1a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1a1a1a 75%), linear-gradient(-45deg, transparent 75%, #1a1a1a 75%)',
+              backgroundSize: '8px 8px',
+              backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px',
+            } : undefined}
           />
-        </div>
-
-        {/* Slider line */}
-        <div
-          className="absolute top-0 bottom-0 w-0.5 bg-white/80 pointer-events-none"
-          style={{ left: `${sliderPos}%`, transform: 'translateX(-50%)' }}
-        >
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 shadow-lg flex items-center justify-center">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-bg-primary">
-              <path d="M4 3L1 7L4 11M10 3L13 7L10 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-        </div>
-
-        {/* Labels */}
-        <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wider bg-black/60 text-white px-2 py-0.5 rounded">
-          Before
-        </span>
-        <span className="absolute top-2 right-2 text-[10px] font-bold uppercase tracking-wider bg-black/60 text-white px-2 py-0.5 rounded">
-          After
-        </span>
+        )}
       </div>
 
-      {/* Stats */}
-      <div className="rounded-xl border border-border bg-bg-card p-4">
-        <div className="flex items-center justify-between text-xs text-text-secondary mb-3">
-          <span>
-            {result.width} x {result.height}px
+      {/* Name + status */}
+      <div className="flex-1 min-w-0">
+        <p className="text-text-primary text-sm font-medium truncate">{result.originalFile.name}</p>
+        {result.status === 'processing' && (
+          <span className="text-gold text-xs">Removing background...</span>
+        )}
+        {result.status === 'pending' && (
+          <span className="text-text-secondary/50 text-xs">Queued</span>
+        )}
+        {result.status === 'error' && (
+          <span className="text-error text-xs">{result.error ?? 'Failed'}</span>
+        )}
+        {result.status === 'done' && result.pngBlob && (
+          <span className="text-text-secondary text-xs">
+            {result.width} x {result.height}px &middot; PNG {formatBytes(result.pngBlob.size)}
+            {result.webpBlob && ` · WebP ${formatBytes(result.webpBlob.size)}`}
           </span>
-          <span>Original: {formatBytes(result.originalSize)}</span>
-        </div>
+        )}
+      </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-text-primary">PNG</span>
-              <span className="text-xs text-text-secondary">{formatBytes(result.pngSize)}</span>
-            </div>
+      {/* Actions when done */}
+      {result.status === 'done' && (
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => onDownloadPng(result)}
+            className="btn-shine bg-gold hover:bg-gold-light text-bg-primary text-xs font-bold px-3.5 py-1.5 rounded-md transition-all duration-200 cursor-pointer"
+          >
+            PNG
+          </button>
+          {result.webpBlob && (
             <button
-              onClick={handleDownloadPng}
-              className="btn-shine bg-gold hover:bg-gold-light text-bg-primary text-xs font-bold px-4 py-2 rounded-md cursor-pointer transition-all"
+              onClick={() => onDownloadWebp(result)}
+              className="btn-shine bg-gold hover:bg-gold-light text-bg-primary text-xs font-bold px-3.5 py-1.5 rounded-md transition-all duration-200 cursor-pointer"
             >
-              Download PNG
+              WebP
             </button>
-          </div>
-
-          {result.resultWebpBlob && result.webpSize != null && (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-text-primary">WebP</span>
-                <span className="text-xs text-text-secondary">{formatBytes(result.webpSize)}</span>
-                {result.webpSize < result.pngSize && (
-                  <span className="text-xs text-success">
-                    {Math.round((1 - result.webpSize / result.pngSize) * 100)}% smaller
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={handleDownloadWebp}
-                className="btn-shine bg-gold hover:bg-gold-light text-bg-primary text-xs font-bold px-4 py-2 rounded-md cursor-pointer transition-all"
-              >
-                Download WebP
-              </button>
-            </div>
           )}
+          <button
+            onClick={() => onTransfer(result, 'edit')}
+            className="text-xs px-2.5 py-1.5 rounded-md text-text-secondary hover:text-text-primary bg-white/5 hover:bg-white/8 transition-all duration-200 cursor-pointer"
+          >
+            Edit
+          </button>
         </div>
-      </div>
+      )}
 
-      {/* Actions */}
-      <div className="flex flex-wrap gap-2 justify-center">
-        <button
-          onClick={() => handleTransfer('edit')}
-          className="text-xs px-3 py-2 rounded-lg bg-white/5 hover:bg-white/8 text-text-primary cursor-pointer transition-all"
-        >
-          Send to Editor
-        </button>
-        <button
-          onClick={() => handleTransfer('compress')}
-          className="text-xs px-3 py-2 rounded-lg bg-white/5 hover:bg-white/8 text-text-primary cursor-pointer transition-all"
-        >
-          Send to Compress
-        </button>
-        <button
-          onClick={handleClear}
-          className="text-xs px-3 py-2 rounded-lg bg-white/5 hover:bg-white/8 text-text-primary cursor-pointer transition-all"
-        >
-          New Image
-        </button>
-      </div>
+      {/* Spinner when processing */}
+      {result.status === 'processing' && (
+        <svg className="progress-ring w-5 h-5 shrink-0" viewBox="0 0 36 36">
+          <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(201,168,76,0.15)" strokeWidth="3" />
+          <circle cx="18" cy="18" r="14" fill="none" stroke="#c9a84c" strokeWidth="3" strokeDasharray="60 28" strokeLinecap="round" />
+        </svg>
+      )}
     </div>
   );
 }

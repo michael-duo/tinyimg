@@ -5,16 +5,10 @@ import DropZone from './DropZone';
 import { getImage, setImage, clearImage } from '../lib/image-transfer';
 import { downloadSingle } from '../lib/download';
 import type { EditMessage, EditResultMessage, EditErrorMessage } from '../workers/edit-worker';
-import type { FaceDetector as FaceDetectorType, FaceDetectorResult, InteractiveSegmenter as InteractiveSegmenterType } from '@mediapipe/tasks-vision';
+import type { FaceDetector as FaceDetectorType, FaceDetectorResult } from '@mediapipe/tasks-vision';
 
 /* ── Types ── */
-type Tool = 'crop' | 'resize' | 'rotate' | 'flip' | 'faceblur' | 'smartcrop' | 'eraser' | 'magiceraser';
-
-interface EraserPoint {
-  x: number; // normalized 0-1
-  y: number; // normalized 0-1
-  radius: number; // normalized 0-1 (relative to image width)
-}
+type Tool = 'crop' | 'resize' | 'rotate' | 'flip' | 'faceblur' | 'smartcrop';
 
 interface BoundingBox {
   originX: number;
@@ -58,8 +52,6 @@ const TOOLS: { id: Tool; label: string; icon: string }[] = [
   { id: 'flip', label: 'Flip', icon: 'M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4' },
   { id: 'faceblur', label: 'Face Blur', icon: 'M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z' },
   { id: 'smartcrop', label: 'Smart Crop', icon: 'M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-  { id: 'eraser', label: 'Eraser', icon: 'M5.25 7.5A2.25 2.25 0 017.5 5.25h9a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25H15m-6 0h6m-6 0L3.75 12.75a2.25 2.25 0 010-3.182L9 4.5' },
-  { id: 'magiceraser', label: 'Magic Eraser', icon: 'M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z' },
 ];
 
 /* ── Tool grouping separator index ── */
@@ -110,23 +102,9 @@ export default function ImageEditor() {
   const [detectingFaces, setDetectingFaces] = useState(false);
   const [blurRadius, setBlurRadius] = useState(20);
 
-  /* ── Eraser state ── */
-  const [eraserBrushSize, setEraserBrushSize] = useState(20);
-  const [eraserStrokes, setEraserStrokes] = useState<EraserPoint[]>([]);
-  const [isErasing, setIsErasing] = useState(false);
-
-  /* ── Magic eraser state ── */
-  const [magicMask, setMagicMask] = useState<Float32Array | null>(null);
-  const [magicMaskDims, setMagicMaskDims] = useState<{ width: number; height: number } | null>(null);
-  const [loadingMagicModel, setLoadingMagicModel] = useState(false);
-  const [magicModelReady, setMagicModelReady] = useState(false);
-
   const imgRef = useRef<HTMLImageElement>(null);
   const workerRef = useRef<Worker | null>(null);
   const faceDetectorRef = useRef<FaceDetectorType | null>(null);
-  const interactiveSegmenterRef = useRef<InteractiveSegmenterType | null>(null);
-  const eraserOverlayRef = useRef<HTMLCanvasElement>(null);
-  const magicOverlayRef = useRef<HTMLCanvasElement>(null);
 
   /* ── Toast helper ── */
   const showToast = useCallback((msg: string) => {
@@ -467,329 +445,6 @@ export default function ImageEditor() {
 
   /* ── Smart crop apply (reuses handleCropApply) ── */
   const handleSmartCropApply = handleCropApply;
-
-  /* ── Eraser: mouse/touch handlers ── */
-  const getEraserPoint = useCallback(
-    (clientX: number, clientY: number): EraserPoint | null => {
-      const img = imgRef.current;
-      if (!img) return null;
-      const rect = img.getBoundingClientRect();
-      const x = clientX - rect.left;
-      const y = clientY - rect.top;
-      return {
-        x: x / rect.width,
-        y: y / rect.height,
-        radius: eraserBrushSize / rect.width,
-      };
-    },
-    [eraserBrushSize]
-  );
-
-  const handleEraserPointerDown = useCallback(
-    (e: React.MouseEvent) => {
-      if (activeTool !== 'eraser' || processing) return;
-      setIsErasing(true);
-      const pt = getEraserPoint(e.clientX, e.clientY);
-      if (pt) setEraserStrokes((prev) => [...prev, pt]);
-    },
-    [activeTool, processing, getEraserPoint]
-  );
-
-  const handleEraserPointerMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (!isErasing || activeTool !== 'eraser') return;
-      const pt = getEraserPoint(e.clientX, e.clientY);
-      if (pt) setEraserStrokes((prev) => [...prev, pt]);
-    },
-    [isErasing, activeTool, getEraserPoint]
-  );
-
-  const handleEraserPointerUp = useCallback(() => {
-    setIsErasing(false);
-  }, []);
-
-  const handleEraserTouchStart = useCallback(
-    (e: React.TouchEvent) => {
-      if (activeTool !== 'eraser' || processing) return;
-      e.preventDefault();
-      setIsErasing(true);
-      const pt = getEraserPoint(e.touches[0].clientX, e.touches[0].clientY);
-      if (pt) setEraserStrokes((prev) => [...prev, pt]);
-    },
-    [activeTool, processing, getEraserPoint]
-  );
-
-  const handleEraserTouchMove = useCallback(
-    (e: React.TouchEvent) => {
-      if (!isErasing || activeTool !== 'eraser') return;
-      e.preventDefault();
-      const pt = getEraserPoint(e.touches[0].clientX, e.touches[0].clientY);
-      if (pt) setEraserStrokes((prev) => [...prev, pt]);
-    },
-    [isErasing, activeTool, getEraserPoint]
-  );
-
-  /* ── Eraser: draw overlay ── */
-  useEffect(() => {
-    const canvas = eraserOverlayRef.current;
-    const img = imgRef.current;
-    if (!canvas || !img || activeTool !== 'eraser') return;
-    const rect = img.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    const ctx = canvas.getContext('2d')!;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.45)';
-    for (const pt of eraserStrokes) {
-      ctx.beginPath();
-      ctx.arc(pt.x * canvas.width, pt.y * canvas.height, pt.radius * canvas.width, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }, [eraserStrokes, activeTool]);
-
-  /* ── Eraser: apply ── */
-  const handleEraserApply = useCallback(async () => {
-    if (!image || eraserStrokes.length === 0 || processing) return;
-    pushUndo(image);
-    setProcessing(true);
-    try {
-      const fullImg = new Image();
-      fullImg.crossOrigin = 'anonymous';
-      const url = URL.createObjectURL(image.blob);
-      await new Promise<void>((resolve, reject) => {
-        fullImg.onload = () => resolve();
-        fullImg.onerror = () => reject(new Error('Failed to load image'));
-        fullImg.src = url;
-      });
-      const canvas = document.createElement('canvas');
-      canvas.width = fullImg.naturalWidth;
-      canvas.height = fullImg.naturalHeight;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(fullImg, 0, 0);
-      URL.revokeObjectURL(url);
-
-      // Erase: use destination-out to punch transparent holes
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.fillStyle = 'rgba(0,0,0,1)';
-      for (const pt of eraserStrokes) {
-        ctx.beginPath();
-        ctx.arc(
-          pt.x * canvas.width,
-          pt.y * canvas.height,
-          pt.radius * canvas.width,
-          0,
-          Math.PI * 2
-        );
-        ctx.fill();
-      }
-      ctx.globalCompositeOperation = 'source-over';
-
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Failed to create blob'))), 'image/png');
-      });
-      setImageState({ blob, width: image.width, height: image.height, name: image.name });
-      setEraserStrokes([]);
-      showToast('Eraser applied');
-    } catch (err) {
-      console.error('Eraser failed:', err);
-      showToast('Eraser failed');
-      setUndoStack((prev) => {
-        if (prev.length === 0) return prev;
-        const next = [...prev];
-        const reverted = next.pop()!;
-        setImageState(reverted);
-        return next;
-      });
-    } finally {
-      setProcessing(false);
-    }
-  }, [image, eraserStrokes, processing, pushUndo, showToast]);
-
-  /* ── Magic Eraser: lazy-load InteractiveSegmenter ── */
-  const getInteractiveSegmenter = useCallback(async (): Promise<InteractiveSegmenterType> => {
-    if (interactiveSegmenterRef.current) return interactiveSegmenterRef.current;
-    setLoadingMagicModel(true);
-    try {
-      const { FilesetResolver, InteractiveSegmenter } = await import('@mediapipe/tasks-vision');
-      const vision = await FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm'
-      );
-      const segmenter = await InteractiveSegmenter.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath:
-            'https://storage.googleapis.com/mediapipe-models/interactive_segmenter/magic_touch/float32/latest/magic_touch.tflite',
-          delegate: 'GPU',
-        },
-        outputConfidenceMasks: true,
-        outputCategoryMask: false,
-      });
-      interactiveSegmenterRef.current = segmenter;
-      setMagicModelReady(true);
-      return segmenter;
-    } finally {
-      setLoadingMagicModel(false);
-    }
-  }, []);
-
-  /* ── Magic Eraser: handle click on image ── */
-  const handleMagicEraserClick = useCallback(
-    async (e: React.MouseEvent) => {
-      if (activeTool !== 'magiceraser' || processing || !imgRef.current || !image) return;
-      const img = imgRef.current;
-      const rect = img.getBoundingClientRect();
-      const normX = (e.clientX - rect.left) / rect.width;
-      const normY = (e.clientY - rect.top) / rect.height;
-
-      try {
-        const segmenter = await getInteractiveSegmenter();
-
-        // Need a clean image element for segmentation
-        const segImg = new Image();
-        segImg.crossOrigin = 'anonymous';
-        const url = URL.createObjectURL(image.blob);
-        await new Promise<void>((resolve, reject) => {
-          segImg.onload = () => resolve();
-          segImg.onerror = () => reject(new Error('Failed to load image'));
-          segImg.src = url;
-        });
-
-        segmenter.segment(
-          segImg,
-          { keypoint: { x: normX, y: normY } },
-          (result) => {
-            URL.revokeObjectURL(url);
-            if (!result.confidenceMasks || result.confidenceMasks.length === 0) {
-              showToast('No segment detected at that point');
-              return;
-            }
-            const maskData = result.confidenceMasks[0].getAsFloat32Array();
-            const w = result.confidenceMasks[0].width;
-            const h = result.confidenceMasks[0].height;
-            setMagicMaskDims({ width: w, height: h });
-            setMagicMask((prev) => {
-              if (prev && prev.length === maskData.length) {
-                // Union: take max of existing and new mask
-                const merged = new Float32Array(prev.length);
-                for (let i = 0; i < merged.length; i++) {
-                  merged[i] = Math.max(prev[i], maskData[i]);
-                }
-                return merged;
-              }
-              return maskData;
-            });
-          }
-        );
-      } catch (err) {
-        console.error('Magic eraser segmentation failed:', err);
-        showToast('Segmentation failed');
-      }
-    },
-    [activeTool, processing, image, getInteractiveSegmenter, showToast]
-  );
-
-  /* ── Magic Eraser: draw overlay ── */
-  useEffect(() => {
-    const canvas = magicOverlayRef.current;
-    const img = imgRef.current;
-    if (!canvas || !img || activeTool !== 'magiceraser' || !magicMask || !magicMaskDims) return;
-    const rect = img.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    const ctx = canvas.getContext('2d')!;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Draw red overlay where mask > 0.5
-    const imgData = ctx.createImageData(canvas.width, canvas.height);
-    const scaleX = magicMaskDims.width / canvas.width;
-    const scaleY = magicMaskDims.height / canvas.height;
-    for (let y = 0; y < canvas.height; y++) {
-      for (let x = 0; x < canvas.width; x++) {
-        const mx = Math.floor(x * scaleX);
-        const my = Math.floor(y * scaleY);
-        const mi = my * magicMaskDims.width + mx;
-        if (magicMask[mi] > 0.5) {
-          const pi = (y * canvas.width + x) * 4;
-          imgData.data[pi] = 239;     // red
-          imgData.data[pi + 1] = 68;  // green
-          imgData.data[pi + 2] = 68;  // blue
-          imgData.data[pi + 3] = 115; // alpha
-        }
-      }
-    }
-    ctx.putImageData(imgData, 0, 0);
-  }, [magicMask, magicMaskDims, activeTool]);
-
-  /* ── Magic Eraser: apply ── */
-  const handleMagicEraserApply = useCallback(async () => {
-    if (!image || !magicMask || !magicMaskDims || processing) return;
-    pushUndo(image);
-    setProcessing(true);
-    try {
-      const fullImg = new Image();
-      fullImg.crossOrigin = 'anonymous';
-      const url = URL.createObjectURL(image.blob);
-      await new Promise<void>((resolve, reject) => {
-        fullImg.onload = () => resolve();
-        fullImg.onerror = () => reject(new Error('Failed to load image'));
-        fullImg.src = url;
-      });
-      const canvas = document.createElement('canvas');
-      canvas.width = fullImg.naturalWidth;
-      canvas.height = fullImg.naturalHeight;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(fullImg, 0, 0);
-      URL.revokeObjectURL(url);
-
-      // Get pixel data and set alpha = 0 where mask > 0.5
-      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const scaleX = magicMaskDims.width / canvas.width;
-      const scaleY = magicMaskDims.height / canvas.height;
-      for (let y = 0; y < canvas.height; y++) {
-        for (let x = 0; x < canvas.width; x++) {
-          const mx = Math.floor(x * scaleX);
-          const my = Math.floor(y * scaleY);
-          const mi = my * magicMaskDims.width + mx;
-          if (magicMask[mi] > 0.5) {
-            const pi = (y * canvas.width + x) * 4;
-            imgData.data[pi + 3] = 0; // transparent
-          }
-        }
-      }
-      ctx.putImageData(imgData, 0, 0);
-
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Failed to create blob'))), 'image/png');
-      });
-      setImageState({ blob, width: image.width, height: image.height, name: image.name });
-      setMagicMask(null);
-      setMagicMaskDims(null);
-      showToast('Magic eraser applied');
-    } catch (err) {
-      console.error('Magic eraser failed:', err);
-      showToast('Magic eraser failed');
-      setUndoStack((prev) => {
-        if (prev.length === 0) return prev;
-        const next = [...prev];
-        const reverted = next.pop()!;
-        setImageState(reverted);
-        return next;
-      });
-    } finally {
-      setProcessing(false);
-    }
-  }, [image, magicMask, magicMaskDims, processing, pushUndo, showToast]);
-
-  /* ── Clear eraser/magic state when switching tools ── */
-  useEffect(() => {
-    if (activeTool !== 'eraser') {
-      setEraserStrokes([]);
-      setIsErasing(false);
-    }
-    if (activeTool !== 'magiceraser') {
-      setMagicMask(null);
-      setMagicMaskDims(null);
-    }
-  }, [activeTool]);
 
   /* ── Download ── */
   const handleDownload = useCallback(() => {
@@ -1144,78 +799,6 @@ export default function ImageEditor() {
           </div>
         )}
 
-        {activeTool === 'eraser' && (
-          <div className="flex items-center gap-3 flex-wrap">
-            <label className="text-xs text-text-secondary">Brush size:</label>
-            <input
-              type="range"
-              min={5}
-              max={100}
-              value={eraserBrushSize}
-              onChange={(e) => setEraserBrushSize(Number(e.target.value))}
-              className="w-32 accent-gold"
-            />
-            <span className="text-xs text-text-primary">{eraserBrushSize}px</span>
-            <p className="text-xs text-text-secondary ml-2">Paint on the image to erase areas</p>
-            <div className="flex items-center gap-2 ml-auto">
-              {eraserStrokes.length > 0 && (
-                <button
-                  onClick={() => setEraserStrokes([])}
-                  disabled={processing}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/8 text-text-primary cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Clear
-                </button>
-              )}
-              <button
-                onClick={handleEraserApply}
-                disabled={eraserStrokes.length === 0 || processing}
-                className="btn-shine bg-gold hover:bg-gold-light text-bg-primary text-xs font-bold px-4 py-2 rounded-md transition-all duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        )}
-
-        {activeTool === 'magiceraser' && (
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-xs text-text-secondary">
-              {loadingMagicModel
-                ? 'Loading AI model...'
-                : magicModelReady
-                  ? 'Ready'
-                  : 'Click on areas to remove'}
-            </span>
-            {loadingMagicModel && (
-              <svg className="w-4 h-4 text-gold progress-ring" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.2" />
-                <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            )}
-            {!loadingMagicModel && (
-              <p className="text-xs text-text-secondary">Click on areas to remove</p>
-            )}
-            <div className="flex items-center gap-2 ml-auto">
-              {magicMask && (
-                <button
-                  onClick={() => { setMagicMask(null); setMagicMaskDims(null); }}
-                  disabled={processing}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/8 text-text-primary cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Clear Selection
-                </button>
-              )}
-              <button
-                onClick={handleMagicEraserApply}
-                disabled={!magicMask || processing || loadingMagicModel}
-                className="btn-shine bg-gold hover:bg-gold-light text-bg-primary text-xs font-bold px-4 py-2 rounded-md transition-all duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Canvas preview area */}
@@ -1244,18 +827,7 @@ export default function ImageEditor() {
             />
           </ReactCrop>
         ) : previewUrl ? (
-          <div
-            className="relative inline-block"
-            onMouseDown={activeTool === 'eraser' ? handleEraserPointerDown : undefined}
-            onMouseMove={activeTool === 'eraser' ? handleEraserPointerMove : undefined}
-            onMouseUp={activeTool === 'eraser' ? handleEraserPointerUp : undefined}
-            onMouseLeave={activeTool === 'eraser' ? handleEraserPointerUp : undefined}
-            onTouchStart={activeTool === 'eraser' ? handleEraserTouchStart : undefined}
-            onTouchMove={activeTool === 'eraser' ? handleEraserTouchMove : undefined}
-            onTouchEnd={activeTool === 'eraser' ? handleEraserPointerUp : undefined}
-            onClick={activeTool === 'magiceraser' ? handleMagicEraserClick : undefined}
-            style={{ cursor: activeTool === 'eraser' ? 'crosshair' : activeTool === 'magiceraser' ? 'crosshair' : undefined }}
-          >
+          <div className="relative inline-block">
             <img
               ref={imgRef}
               src={previewUrl}
@@ -1283,22 +855,6 @@ export default function ImageEditor() {
                   </div>
                 ))}
               </div>
-            )}
-            {/* Eraser overlay canvas */}
-            {activeTool === 'eraser' && (
-              <canvas
-                ref={eraserOverlayRef}
-                className="absolute inset-0 pointer-events-none"
-                style={{ width: '100%', height: '100%' }}
-              />
-            )}
-            {/* Magic eraser overlay canvas */}
-            {activeTool === 'magiceraser' && (
-              <canvas
-                ref={magicOverlayRef}
-                className="absolute inset-0 pointer-events-none"
-                style={{ width: '100%', height: '100%' }}
-              />
             )}
           </div>
         ) : null}

@@ -5,9 +5,17 @@ import DropZone from './DropZone';
 import { getImage, setImage, clearImage } from '../lib/image-transfer';
 import { downloadSingle } from '../lib/download';
 import type { EditMessage, EditResultMessage, EditErrorMessage } from '../workers/edit-worker';
+import type { FaceDetector as FaceDetectorType, FaceDetectorResult } from '@mediapipe/tasks-vision';
 
 /* ── Types ── */
-type Tool = 'crop' | 'resize' | 'rotate' | 'flip';
+type Tool = 'crop' | 'resize' | 'rotate' | 'flip' | 'faceblur' | 'smartcrop';
+
+interface BoundingBox {
+  originX: number;
+  originY: number;
+  width: number;
+  height: number;
+}
 
 interface ImageState {
   blob: Blob;
@@ -42,7 +50,33 @@ const TOOLS: { id: Tool; label: string; icon: string }[] = [
   { id: 'resize', label: 'Resize', icon: 'M4 8V4h4M4 16v4h4M20 8V4h-4M20 16v4h-4' },
   { id: 'rotate', label: 'Rotate', icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' },
   { id: 'flip', label: 'Flip', icon: 'M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4' },
+  { id: 'faceblur', label: 'Face Blur', icon: 'M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z' },
+  { id: 'smartcrop', label: 'Smart Crop', icon: 'M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
 ];
+
+/* ── Face blur helper ── */
+function applyFaceBlur(img: HTMLImageElement, faces: BoundingBox[], blurRadius: number): Promise<Blob> {
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(img, 0, 0);
+
+  ctx.filter = `blur(${blurRadius}px)`;
+  for (const face of faces) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(face.originX, face.originY, face.width, face.height);
+    ctx.clip();
+    ctx.drawImage(img, 0, 0);
+    ctx.restore();
+  }
+  ctx.filter = 'none';
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Failed to create blob'))), 'image/png');
+  });
+}
 
 export default function ImageEditor() {
   /* ── Core state ── */
@@ -60,8 +94,14 @@ export default function ImageEditor() {
   const [resizeH, setResizeH] = useState('');
   const [lockAspect, setLockAspect] = useState(true);
 
+  /* ── AI face detection state ── */
+  const [detectedFaces, setDetectedFaces] = useState<BoundingBox[]>([]);
+  const [detectingFaces, setDetectingFaces] = useState(false);
+  const [blurRadius, setBlurRadius] = useState(20);
+
   const imgRef = useRef<HTMLImageElement>(null);
   const workerRef = useRef<Worker | null>(null);
+  const faceDetectorRef = useRef<FaceDetectorType | null>(null);
 
   /* ── Toast helper ── */
   const showToast = useCallback((msg: string) => {
@@ -103,6 +143,100 @@ export default function ImageEditor() {
       }
     })();
   }, []);
+
+  /* ── Initialize FaceDetector (shared between faceblur and smartcrop) ── */
+  const getFaceDetector = useCallback(async (): Promise<FaceDetectorType> => {
+    if (faceDetectorRef.current) return faceDetectorRef.current;
+    const { FilesetResolver, FaceDetector } = await import('@mediapipe/tasks-vision');
+    const vision = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm'
+    );
+    const detector = await FaceDetector.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath:
+          'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite',
+        delegate: 'GPU',
+      },
+      runningMode: 'IMAGE',
+    });
+    faceDetectorRef.current = detector;
+    return detector;
+  }, []);
+
+  /* ── Detect faces on current image ── */
+  const detectFaces = useCallback(async () => {
+    if (!imgRef.current || !image) return;
+    setDetectingFaces(true);
+    setDetectedFaces([]);
+    try {
+      const detector = await getFaceDetector();
+      // FaceDetector needs the image to be loaded; use the displayed img element
+      const result: FaceDetectorResult = detector.detect(imgRef.current);
+      const faces = result.detections
+        .filter((d) => d.boundingBox)
+        .map((d) => ({
+          originX: d.boundingBox.originX,
+          originY: d.boundingBox.originY,
+          width: d.boundingBox.width,
+          height: d.boundingBox.height,
+        }));
+      setDetectedFaces(faces);
+      if (faces.length === 0) {
+        showToast('No faces detected');
+      }
+    } catch (err) {
+      console.error('Face detection failed:', err);
+      showToast('Face detection failed');
+    } finally {
+      setDetectingFaces(false);
+    }
+  }, [image, getFaceDetector, showToast]);
+
+  /* ── Auto-detect faces when switching to faceblur or smartcrop ── */
+  useEffect(() => {
+    if ((activeTool === 'faceblur' || activeTool === 'smartcrop') && image && imgRef.current) {
+      // Wait a tick for the img element to render with the latest src
+      const timer = setTimeout(() => detectFaces(), 100);
+      return () => clearTimeout(timer);
+    }
+    if (activeTool !== 'faceblur' && activeTool !== 'smartcrop') {
+      setDetectedFaces([]);
+    }
+  }, [activeTool, image]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Smart crop: compute crop from detected faces ── */
+  useEffect(() => {
+    if (activeTool !== 'smartcrop' || detectedFaces.length === 0 || !image || !imgRef.current) return;
+    const img = imgRef.current;
+    const scaleX = img.width / image.width;
+    const scaleY = img.height / image.height;
+
+    // Find bounding box of all faces (in natural image coordinates)
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const face of detectedFaces) {
+      minX = Math.min(minX, face.originX);
+      minY = Math.min(minY, face.originY);
+      maxX = Math.max(maxX, face.originX + face.width);
+      maxY = Math.max(maxY, face.originY + face.height);
+    }
+
+    // Add 30% padding
+    const padX = (maxX - minX) * 0.3;
+    const padY = (maxY - minY) * 0.3;
+    minX = Math.max(0, minX - padX);
+    minY = Math.max(0, minY - padY);
+    maxX = Math.min(image.width, maxX + padX);
+    maxY = Math.min(image.height, maxY + padY);
+
+    // Convert to display coordinates for ReactCrop
+    setCrop({
+      unit: 'px',
+      x: minX * scaleX,
+      y: minY * scaleY,
+      width: (maxX - minX) * scaleX,
+      height: (maxY - minY) * scaleY,
+    });
+  }, [detectedFaces, activeTool, image]);
 
   /* ── File upload handler ── */
   const handleFiles = useCallback(async (files: File[]) => {
@@ -270,6 +404,45 @@ export default function ImageEditor() {
     [applyEdit]
   );
 
+  /* ── Face blur apply ── */
+  const handleFaceBlurApply = useCallback(async () => {
+    if (!image || !imgRef.current || detectedFaces.length === 0 || processing) return;
+    pushUndo(image);
+    setProcessing(true);
+    try {
+      // Create a full-resolution image element for blur
+      const fullImg = new Image();
+      fullImg.crossOrigin = 'anonymous';
+      const url = URL.createObjectURL(image.blob);
+      await new Promise<void>((resolve, reject) => {
+        fullImg.onload = () => resolve();
+        fullImg.onerror = () => reject(new Error('Failed to load image'));
+        fullImg.src = url;
+      });
+      const blob = await applyFaceBlur(fullImg, detectedFaces, blurRadius);
+      URL.revokeObjectURL(url);
+      setImageState({ blob, width: image.width, height: image.height, name: image.name });
+      setDetectedFaces([]);
+      showToast('Face blur applied');
+    } catch (err) {
+      console.error('Face blur failed:', err);
+      showToast('Face blur failed');
+      // revert undo
+      setUndoStack((prev) => {
+        if (prev.length === 0) return prev;
+        const next = [...prev];
+        const reverted = next.pop()!;
+        setImageState(reverted);
+        return next;
+      });
+    } finally {
+      setProcessing(false);
+    }
+  }, [image, detectedFaces, blurRadius, processing, pushUndo, showToast]);
+
+  /* ── Smart crop apply (reuses handleCropApply) ── */
+  const handleSmartCropApply = handleCropApply;
+
   /* ── Download ── */
   const handleDownload = useCallback(() => {
     if (!image) return;
@@ -301,6 +474,21 @@ export default function ImageEditor() {
       </div>
     );
   }
+
+  /* ── Compute face overlay boxes (display coordinates) ── */
+  const faceOverlayBoxes = (activeTool === 'faceblur' || activeTool === 'smartcrop') && imgRef.current && image
+    ? detectedFaces.map((face) => {
+        const img = imgRef.current!;
+        const scaleX = img.width / image.width;
+        const scaleY = img.height / image.height;
+        return {
+          left: face.originX * scaleX,
+          top: face.originY * scaleY,
+          width: face.width * scaleX,
+          height: face.height * scaleY,
+        };
+      })
+    : [];
 
   /* ── Render ── */
   return (
@@ -514,6 +702,95 @@ export default function ImageEditor() {
             </button>
           </div>
         )}
+
+        {activeTool === 'faceblur' && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-xs text-text-secondary">
+                {detectingFaces
+                  ? 'Detecting faces...'
+                  : detectedFaces.length > 0
+                    ? `${detectedFaces.length} face${detectedFaces.length > 1 ? 's' : ''} detected`
+                    : 'No faces found'}
+              </span>
+              {detectingFaces && (
+                <svg className="w-4 h-4 text-gold progress-ring" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.2" />
+                  <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              )}
+              <button
+                onClick={detectFaces}
+                disabled={detectingFaces || processing}
+                className="text-xs px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/8 text-text-primary cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Re-detect
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="text-xs text-text-secondary">Blur intensity:</label>
+              <input
+                type="range"
+                min={10}
+                max={50}
+                value={blurRadius}
+                onChange={(e) => setBlurRadius(Number(e.target.value))}
+                className="w-32 accent-gold"
+              />
+              <span className="text-xs text-text-primary">{blurRadius}px</span>
+              <button
+                onClick={handleFaceBlurApply}
+                disabled={detectedFaces.length === 0 || processing || detectingFaces}
+                className="btn-shine bg-gold hover:bg-gold-light text-bg-primary text-xs font-bold px-4 py-2 rounded-md transition-all duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ml-auto"
+              >
+                Apply Blur
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTool === 'smartcrop' && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-xs text-text-secondary">
+                {detectingFaces
+                  ? 'Detecting faces...'
+                  : detectedFaces.length > 0
+                    ? `${detectedFaces.length} face${detectedFaces.length > 1 ? 's' : ''} detected — crop region auto-set`
+                    : 'No faces detected — try manual crop'}
+              </span>
+              {detectingFaces && (
+                <svg className="w-4 h-4 text-gold progress-ring" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.2" />
+                  <path d="M12 2a10 10 0 019.95 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              )}
+              <button
+                onClick={detectFaces}
+                disabled={detectingFaces || processing}
+                className="text-xs px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/8 text-text-primary cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Re-detect
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-text-secondary">
+                {crop && crop.width > 0
+                  ? `Crop: ${Math.round(crop.width)} x ${Math.round(crop.height)}px (display) — adjust if needed`
+                  : 'Select a crop area or detect faces to auto-crop'}
+              </p>
+              <button
+                onClick={handleSmartCropApply}
+                disabled={!crop || crop.width === 0 || processing}
+                className="btn-shine bg-gold hover:bg-gold-light text-bg-primary text-xs font-bold px-4 py-2 rounded-md transition-all duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Apply Crop
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Canvas preview area */}
@@ -531,8 +808,8 @@ export default function ImageEditor() {
           </div>
         )}
 
-        {previewUrl && activeTool === 'crop' ? (
-          <ReactCrop crop={crop} onChange={(c) => setCrop(c)} disabled={processing} aspect={aspectRatio}>
+        {previewUrl && (activeTool === 'crop' || activeTool === 'smartcrop') ? (
+          <ReactCrop crop={crop} onChange={(c) => setCrop(c)} disabled={processing} aspect={activeTool === 'crop' ? aspectRatio : undefined}>
             <img
               ref={imgRef}
               src={previewUrl}
@@ -542,13 +819,36 @@ export default function ImageEditor() {
             />
           </ReactCrop>
         ) : previewUrl ? (
-          <img
-            ref={imgRef}
-            src={previewUrl}
-            alt="Edit preview"
-            className="max-w-full max-h-[60vh] object-contain"
-            draggable={false}
-          />
+          <div className="relative inline-block">
+            <img
+              ref={imgRef}
+              src={previewUrl}
+              alt="Edit preview"
+              className="max-w-full max-h-[60vh] object-contain"
+              draggable={false}
+            />
+            {/* Face detection overlay */}
+            {activeTool === 'faceblur' && faceOverlayBoxes.length > 0 && (
+              <div className="absolute inset-0 pointer-events-none">
+                {faceOverlayBoxes.map((box, i) => (
+                  <div
+                    key={i}
+                    className="absolute border-2 border-gold rounded-md"
+                    style={{
+                      left: `${box.left}px`,
+                      top: `${box.top}px`,
+                      width: `${box.width}px`,
+                      height: `${box.height}px`,
+                    }}
+                  >
+                    <span className="absolute -top-5 left-0 text-[10px] text-gold bg-bg-primary/80 px-1 rounded">
+                      Face {i + 1}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         ) : null}
       </div>
 

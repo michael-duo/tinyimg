@@ -36,7 +36,7 @@
   "dependencies": {
     "@astrojs/react": "^4.0.0",
     "@astrojs/sitemap": "^3.0.0",
-    "@imgly/background-removal": "^1.7.0",
+    "@mediapipe/tasks-vision": "^0.10.33",
     "@tailwindcss/vite": "^4.0.0",
     "astro": "^5.0.0",
     "file-saver": "^2.0.5",

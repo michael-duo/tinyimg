@@ -5,6 +5,12 @@ import type { TransferImage } from '../lib/image-transfer';
 import { downloadSingle, downloadAll, getCompressedFilename } from '../lib/download';
 import type { ResultMessage, ErrorMessage } from '../workers/image-worker';
 
+// MediaPipe is loaded dynamically at runtime to avoid SSR/Node resolution
+// issues with the package's broken "exports" field in package.json.
+// We store the segmenter instance as `any` to avoid needing static type imports.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Segmenter = any;
+
 interface BgResult {
   id: string;
   originalFile: File;
@@ -27,6 +33,26 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+async function loadSegmenter(): Promise<Segmenter> {
+  const { FilesetResolver, ImageSegmenter } = await import(
+    /* @vite-ignore */ '@mediapipe/tasks-vision'
+  );
+  const vision = await FilesetResolver.forVisionTasks(
+    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm'
+  );
+  const segmenter = await ImageSegmenter.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath:
+        'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite',
+      delegate: 'GPU',
+    },
+    outputConfidenceMasks: true,
+    outputCategoryMask: false,
+    runningMode: 'IMAGE',
+  });
+  return segmenter;
+}
+
 export default function BackgroundRemover() {
   const [results, setResults] = useState<BgResult[]>([]);
   const [sliderPos, setSliderPos] = useState(50);
@@ -36,6 +62,10 @@ export default function BackgroundRemover() {
   const urlsRef = useRef<string[]>([]);
   const abortRef = useRef(false);
   const processingRef = useRef(false);
+
+  // MediaPipe segmenter ref
+  const segmenterRef = useRef<Segmenter>(null);
+  const [modelReady, setModelReady] = useState(false);
 
   // Revoke object URLs on unmount or clear
   const revokeUrls = useCallback(() => {
@@ -49,29 +79,32 @@ export default function BackgroundRemover() {
     };
   }, [revokeUrls]);
 
-  // Preload the AI model in background as soon as the page loads
-  const modelRef = useRef<{ removeBackground: typeof import('@imgly/background-removal')['removeBackground'] } | null>(null);
-  const [modelReady, setModelReady] = useState(false);
-
+  // Preload MediaPipe ImageSegmenter on mount
   useEffect(() => {
     let cancelled = false;
-    // Defer model preload to idle time so it doesn't block page rendering
-    const load = () => {
-      import('@imgly/background-removal').then((mod) => {
-        if (cancelled) return;
-        modelRef.current = { removeBackground: mod.removeBackground };
-        setModelReady(true);
-      }).catch(() => {
+    const init = async () => {
+      try {
+        const segmenter = await loadSegmenter();
+        if (!cancelled) {
+          segmenterRef.current = segmenter;
+          setModelReady(true);
+        }
+      } catch {
         // Will retry when user uploads
-      });
+      }
     };
     if ('requestIdleCallback' in window) {
-      const id = requestIdleCallback(load, { timeout: 3000 });
-      return () => { cancelled = true; cancelIdleCallback(id); };
+      const id = requestIdleCallback(() => init(), { timeout: 3000 });
+      return () => {
+        cancelled = true;
+        cancelIdleCallback(id);
+      };
     } else {
-      // Fallback: defer with setTimeout
-      const id = setTimeout(load, 100);
-      return () => { cancelled = true; clearTimeout(id); };
+      const id = setTimeout(() => init(), 100);
+      return () => {
+        cancelled = true;
+        clearTimeout(id);
+      };
     }
   }, []);
 
@@ -121,143 +154,157 @@ export default function BackgroundRemover() {
     });
   };
 
-  // Downscale large images in a Worker before sending to bg removal (reduces main-thread blocking)
-  const downscaleForModel = useCallback(async (file: File, maxSize = 1024): Promise<File> => {
-    return new Promise((resolve) => {
-      const worker = new Worker(
-        new URL('../workers/edit-worker.ts', import.meta.url),
-        { type: 'module' }
-      );
-      // Check if we need to resize
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        const { naturalWidth: w, naturalHeight: h } = img;
-        if (w <= maxSize && h <= maxSize) {
-          resolve(file); // Already small enough
-          return;
-        }
-        const scale = maxSize / Math.max(w, h);
-        const tw = Math.round(w * scale);
-        const th = Math.round(h * scale);
-        worker.onmessage = (e) => {
-          worker.terminate();
-          if (e.data.type === 'result') {
-            resolve(new File([e.data.blob], file.name, { type: 'image/png' }));
-          } else {
-            resolve(file); // fallback to original
-          }
-        };
-        worker.onerror = () => { worker.terminate(); resolve(file); };
-        worker.postMessage({
-          type: 'edit', blob: file, mimeType: 'image/png',
-          operation: 'resize', params: { targetWidth: tw, targetHeight: th },
-        });
-      };
-      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+  // Remove background using MediaPipe ImageSegmenter
+  const removeBackgroundFromBlob = useCallback(async (blob: Blob): Promise<Blob> => {
+    let segmenter = segmenterRef.current;
+    if (!segmenter) {
+      // Lazy-init if preload hasn't finished
+      segmenter = await loadSegmenter();
+      segmenterRef.current = segmenter;
+      setModelReady(true);
+    }
+
+    // Create HTMLImageElement from blob
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Failed to load image'));
       img.src = url;
+    });
+    URL.revokeObjectURL(url);
+
+    // Run segmentation
+    let maskData: Float32Array | null = null;
+    segmenter.segment(img, (result: { confidenceMasks?: Array<{ getAsFloat32Array(): Float32Array }> }) => {
+      if (result.confidenceMasks && result.confidenceMasks.length > 0) {
+        // Copy the mask data (it gets recycled after callback)
+        const mask = result.confidenceMasks[0];
+        maskData = new Float32Array(mask.getAsFloat32Array());
+      }
+    });
+
+    if (!maskData) throw new Error('Segmentation failed');
+
+    // Apply mask to original image
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const pixels = imageData.data;
+
+    for (let i = 0; i < (maskData as Float32Array).length; i++) {
+      pixels[i * 4 + 3] = Math.round((maskData as Float32Array)[i] * 255); // Set alpha from mask
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+
+    return new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error('Canvas export failed'))),
+        'image/png'
+      );
     });
   }, []);
 
-  const processSingleImage = useCallback(async (file: File, id: string): Promise<void> => {
-    setResults((prev) => prev.map((r) => r.id === id ? { ...r, status: 'processing' } : r));
-
-    try {
-      // Use preloaded model if ready, otherwise import fresh
-      let removeBackground: typeof import('@imgly/background-removal')['removeBackground'];
-      if (modelRef.current) {
-        removeBackground = modelRef.current.removeBackground;
-      } else {
-        const mod = await import('@imgly/background-removal');
-        removeBackground = mod.removeBackground;
-        modelRef.current = { removeBackground };
-      }
-
-      if (abortRef.current) return;
-
-      // Downscale large images off-main-thread to reduce UI blocking
-      const processFile = await downscaleForModel(file);
-
-      // Yield to browser before heavy work
-      await new Promise((r) => setTimeout(r, 0));
-
-      const blob: Blob = await removeBackground(processFile, {
-        model: 'isnet_quint8',
-        device: 'gpu',
-        progress: () => {
-          // Progress is per-image; for batch we just show status
-        },
-      });
-
-      if (abortRef.current) return;
-
-      // Create original preview URL
-      const originalUrl = URL.createObjectURL(file);
-      urlsRef.current.push(originalUrl);
-
-      // The result is a PNG blob
-      const pngBlob = blob;
-      const pngUrl = URL.createObjectURL(pngBlob);
-      urlsRef.current.push(pngUrl);
-
-      // Get dimensions
-      const img = new Image();
-      const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
-        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-        img.onerror = () => reject(new Error('Failed to read image dimensions'));
-        img.src = pngUrl;
-      });
-
-      // Auto-compress to WebP via existing worker
-      let webpBlob: Blob | null = null;
-      let webpUrl: string | null = null;
+  const processSingleImage = useCallback(
+    async (file: File, id: string): Promise<void> => {
+      setResults((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'processing' } : r)));
 
       try {
-        const compressed = await compressWithWorker(pngBlob, file.name);
-        if (compressed && compressed.type === 'image/webp') {
-          webpBlob = compressed;
-          webpUrl = URL.createObjectURL(compressed);
-          urlsRef.current.push(webpUrl);
+        if (abortRef.current) return;
+
+        // Yield to browser before heavy work
+        await new Promise((r) => setTimeout(r, 0));
+
+        const pngBlob = await removeBackgroundFromBlob(file);
+
+        if (abortRef.current) return;
+
+        // Create original preview URL
+        const originalUrl = URL.createObjectURL(file);
+        urlsRef.current.push(originalUrl);
+
+        // Create result preview URL
+        const pngUrl = URL.createObjectURL(pngBlob);
+        urlsRef.current.push(pngUrl);
+
+        // Get dimensions
+        const dimImg = new Image();
+        const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+          dimImg.onload = () => resolve({ width: dimImg.naturalWidth, height: dimImg.naturalHeight });
+          dimImg.onerror = () => reject(new Error('Failed to read image dimensions'));
+          dimImg.src = pngUrl;
+        });
+
+        // Auto-compress to WebP via existing worker
+        let webpBlob: Blob | null = null;
+        let webpUrl: string | null = null;
+
+        try {
+          const compressed = await compressWithWorker(pngBlob, file.name);
+          if (compressed && compressed.type === 'image/webp') {
+            webpBlob = compressed;
+            webpUrl = URL.createObjectURL(compressed);
+            urlsRef.current.push(webpUrl);
+          }
+        } catch {
+          // WebP compression failed, that's okay — we still have PNG
         }
-      } catch {
-        // WebP compression failed, that's okay — we still have PNG
+
+        if (abortRef.current) return;
+
+        setResults((prev) =>
+          prev.map((r) =>
+            r.id === id
+              ? {
+                  ...r,
+                  status: 'done' as const,
+                  originalUrl,
+                  pngBlob,
+                  pngUrl,
+                  webpBlob: webpBlob ?? undefined,
+                  webpUrl: webpUrl ?? undefined,
+                  width: dims.width,
+                  height: dims.height,
+                }
+              : r
+          )
+        );
+      } catch (err) {
+        if (abortRef.current) return;
+        setResults((prev) =>
+          prev.map((r) =>
+            r.id === id
+              ? {
+                  ...r,
+                  status: 'error' as const,
+                  error: err instanceof Error ? err.message : 'Background removal failed',
+                }
+              : r
+          )
+        );
+      }
+    },
+    [removeBackgroundFromBlob]
+  );
+
+  const processQueue = useCallback(
+    async (newEntries: BgResult[]) => {
+      if (processingRef.current) return;
+      processingRef.current = true;
+
+      for (const entry of newEntries) {
+        if (abortRef.current) break;
+        await processSingleImage(entry.originalFile, entry.id);
       }
 
-      if (abortRef.current) return;
-
-      setResults((prev) => prev.map((r) => r.id === id ? {
-        ...r,
-        status: 'done' as const,
-        originalUrl,
-        pngBlob,
-        pngUrl,
-        webpBlob: webpBlob ?? undefined,
-        webpUrl: webpUrl ?? undefined,
-        width: dims.width,
-        height: dims.height,
-      } : r));
-    } catch (err) {
-      if (abortRef.current) return;
-      setResults((prev) => prev.map((r) => r.id === id ? {
-        ...r,
-        status: 'error' as const,
-        error: err instanceof Error ? err.message : 'Background removal failed',
-      } : r));
-    }
-  }, []);
-
-  const processQueue = useCallback(async (newEntries: BgResult[]) => {
-    if (processingRef.current) return;
-    processingRef.current = true;
-
-    for (const entry of newEntries) {
-      if (abortRef.current) break;
-      await processSingleImage(entry.originalFile, entry.id);
-    }
-
-    processingRef.current = false;
-  }, [processSingleImage]);
+      processingRef.current = false;
+    },
+    [processSingleImage]
+  );
 
   const handleFiles = useCallback(
     (files: File[]) => {

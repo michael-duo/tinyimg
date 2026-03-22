@@ -43,6 +43,9 @@ Wrapper on `idb-keyval`:
 interface TransferImage {
   blob: Blob;
   name: string;
+  mimeType: string;          // blob.type — explicit for downstream tools
+  width: number;             // needed for editor canvas setup + resize inputs
+  height: number;            // needed for editor canvas setup + resize inputs
   from: 'compress' | 'edit' | 'remove-bg';
 }
 
@@ -54,7 +57,7 @@ clearImage(): Promise<void>                     // delete after load
 ### Transfer flow
 
 1. User finishes operation on any tool → ResultCard shows action buttons ("Edit", "Remove BG", "Compress")
-2. Click action → `setImage({ blob, name, from })` → `window.location.href = '/edit'`
+2. Click action → `setImage({ blob, name, mimeType: blob.type, width, height, from })` → `window.location.href = '/edit'`
 3. Target page checks IndexedDB on mount → image found → load into tool, `clearImage()`
 4. No image found → show standard DropZone for fresh upload
 
@@ -96,7 +99,8 @@ clearImage(): Promise<void>                     // delete after load
 
 - All transforms execute on `OffscreenCanvas` in `src/workers/edit-worker.ts`
 - Preview renders on main thread `<canvas>`
-- **Undo**: stack of blob states after each operation, Undo pops previous state
+- **Undo**: stack of blob states after each operation, Undo pops previous state. **Max 10 states** — oldest dropped when exceeded to prevent memory exhaustion on mobile
+- **CSS import**: `react-image-crop/dist/ReactCrop.css` must be imported in the `ImageEditor.tsx` component (Astro/Vite handles CSS imports in React islands correctly)
 
 ### Worker message protocol
 
@@ -118,12 +122,18 @@ clearImage(): Promise<void>                     // delete after load
   }
 }
 
-// Worker → Main
+// Worker → Main (success)
 {
   type: 'result',
   blob: Blob,
   width: number,
   height: number
+}
+
+// Worker → Main (error)
+{
+  type: 'error',
+  message: string
 }
 ```
 
@@ -153,10 +163,10 @@ clearImage(): Promise<void>                     // delete after load
 
 1. User uploads or receives image
 2. Show original preview
-3. Run `@imgly/background-removal` in Web Worker (`src/workers/bg-remove-worker.ts`)
-4. Progress bar: model download (first time ~5MB, cached after) + inference
+3. Run `@imgly/background-removal` on **main thread** (library uses DOM APIs internally — `HTMLCanvasElement`, `HTMLImageElement` — and cannot run in a Web Worker). The library handles its own ONNX worker offloading internally via `config.device`.
+4. Progress bar: model download (first time ~5MB, cached after) + inference. Use library's `progress` callback.
 5. Output: PNG blob with alpha channel
-6. **Auto-compress output**: run WebP lossy on the PNG blob → offer both download options (PNG lossless, WebP smaller)
+6. **Auto-compress output**: wrap output blob as `new File([blob], name, { type: 'image/png' })` then send to existing `image-worker.ts` (worker expects `File`, not `Blob`). Worker compresses via `OffscreenCanvas` → `convertToBlob({ type: 'image/webp' })`. Offer both downloads: original PNG (lossless, larger) and WebP (smaller). Note: WebP supports alpha natively. `image-worker.ts` itself remains untouched — caller wraps the blob.
 7. Show before/after slider comparison
 
 ### Constraints
@@ -183,7 +193,7 @@ Update `Header.astro`:
 
 ### ResultCard additions
 
-Each compressed result card gets 2 new action buttons:
+Each compressed result card gets 2 new action buttons (only visible when `status === 'done'`):
 - "Edit" → transfers blob to `/edit`
 - "Remove BG" → transfers blob to `/remove-bg`
 
@@ -206,7 +216,7 @@ Each compressed result card gets 2 new action buttons:
 | `src/components/MoreTools.astro` | Homepage tools showcase section |
 | `src/lib/image-transfer.ts` | IndexedDB blob transfer utility |
 | `src/workers/edit-worker.ts` | Web Worker for crop/resize/rotate/flip |
-| `src/workers/bg-remove-worker.ts` | Web Worker for background removal |
+| ~~`src/workers/bg-remove-worker.ts`~~ | Not needed — `@imgly/background-removal` runs on main thread with internal ONNX offloading |
 
 ## Files to Modify
 
@@ -220,5 +230,5 @@ Each compressed result card gets 2 new action buttons:
 ## Files NOT Modified
 
 - `src/workers/image-worker.ts` — existing compress logic untouched
-- `src/components/ImageProcessor.tsx` — minimal changes (only ResultCard prop updates)
+- `src/components/ImageProcessor.tsx` — untouched; transfer logic lives in `ResultCard.tsx` directly (it already has access to `result.blob`)
 - All static Astro components (Hero, FAQ, Footer, HowItWorks, Features)

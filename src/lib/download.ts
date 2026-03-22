@@ -7,7 +7,7 @@ export interface DownloadableFile {
   filename: string;
 }
 
-function getCompressedFilename(originalName: string, outputFormat: string): string {
+function getCompressedFilename(originalName: string, outputFormat: string, suffix = 'compressed'): string {
   const lastDot = originalName.lastIndexOf('.');
   const baseName = lastDot > 0 ? originalName.substring(0, lastDot) : originalName;
 
@@ -20,11 +20,11 @@ function getCompressedFilename(originalName: string, outputFormat: string): stri
   };
 
   const ext = extMap[outputFormat] || 'bin';
-  return `${baseName}-compressed.${ext}`;
+  return `${baseName}-${suffix}.${ext}`;
 }
 
-export function downloadSingle(blob: Blob, originalName: string, outputFormat: string): void {
-  const filename = getCompressedFilename(originalName, outputFormat);
+export function downloadSingle(blob: Blob, originalName: string, outputFormat: string, suffix = 'compressed'): void {
+  const filename = getCompressedFilename(originalName, outputFormat, suffix);
   saveAs(blob, filename);
 }
 

@@ -27,6 +27,15 @@ const ASPECT_PRESETS = [
   { label: '3:2', value: 3 / 2 },
 ] as const;
 
+/* ── Social media crop presets ── */
+const SOCIAL_PRESETS = [
+  { label: 'IG Post', aspect: 4 / 5, desc: '1080×1350' },
+  { label: 'IG Story', aspect: 9 / 16, desc: '1080×1920' },
+  { label: 'Twitter', aspect: 16 / 9, desc: '1200×675' },
+  { label: 'FB Cover', aspect: 205 / 78, desc: '820×312' },
+  { label: 'YT Thumb', aspect: 16 / 9, desc: '1280×720' },
+] as const;
+
 /* ── Tool definitions ── */
 const TOOLS: { id: Tool; label: string; icon: string }[] = [
   { id: 'crop', label: 'Crop', icon: 'M4 4h4v16H4V4zm12 0h4v16h-4V4zM4 4h16v4H4V4zm0 12h16v4H4v-4z' },
@@ -138,6 +147,17 @@ export default function ImageEditor() {
       const last = next.pop()!;
       setImageState(last);
       return next;
+    });
+  }, []);
+
+  /* ── Reset to original ── */
+  const handleReset = useCallback(() => {
+    setUndoStack((prev) => {
+      if (prev.length === 0) return prev;
+      const original = prev[0];
+      setImageState(original);
+      setCrop(undefined);
+      return [];
     });
   }, []);
 
@@ -253,7 +273,7 @@ export default function ImageEditor() {
   /* ── Download ── */
   const handleDownload = useCallback(() => {
     if (!image) return;
-    downloadSingle(image.blob, image.name, image.blob.type || 'image/png');
+    downloadSingle(image.blob, image.name, image.blob.type || 'image/png', 'edited');
   }, [image]);
 
   /* ── Transfer to other tool ── */
@@ -327,6 +347,18 @@ export default function ImageEditor() {
             </svg>
           </button>
 
+          {/* Reset to original */}
+          <button
+            onClick={handleReset}
+            disabled={undoStack.length === 0 || processing}
+            className="text-xs px-3 py-2 rounded-lg bg-white/5 hover:bg-white/8 text-text-primary cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Reset to original"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+
           {/* Download */}
           <button
             onClick={handleDownload}
@@ -360,6 +392,27 @@ export default function ImageEditor() {
                 ))}
               </div>
             </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-text-secondary">Social:</span>
+              <div className="flex gap-1 flex-wrap">
+                {SOCIAL_PRESETS.map((preset) => (
+                  <button
+                    key={preset.label}
+                    onClick={() => { setAspectRatio(preset.aspect); setCrop(undefined); }}
+                    className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-all duration-200 cursor-pointer ${
+                      aspectRatio === preset.aspect
+                        ? 'bg-gold/20 border-gold/60 text-gold font-semibold'
+                        : 'bg-bg-primary/40 border-border text-text-secondary hover:text-text-primary hover:border-border/80'
+                    }`}
+                  >
+                    <span>{preset.label}</span>
+                    <span className="text-[10px] opacity-60">{preset.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <p className="text-xs text-text-secondary">
                 Drag on the image to select a crop area

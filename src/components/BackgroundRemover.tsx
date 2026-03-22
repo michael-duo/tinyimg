@@ -235,12 +235,12 @@ export default function BackgroundRemover() {
 
   const handleDownloadPng = useCallback(() => {
     if (!result) return;
-    downloadSingle(result.resultPngBlob, result.originalName, 'image/png');
+    downloadSingle(result.resultPngBlob, result.originalName, 'image/png', 'nobg');
   }, [result]);
 
   const handleDownloadWebp = useCallback(() => {
     if (!result?.resultWebpBlob) return;
-    downloadSingle(result.resultWebpBlob, result.originalName, 'image/webp');
+    downloadSingle(result.resultWebpBlob, result.originalName, 'image/webp', 'nobg');
   }, [result]);
 
   const handleTransfer = useCallback(

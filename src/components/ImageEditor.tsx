@@ -18,6 +18,15 @@ interface ImageState {
 
 const MAX_UNDO = 10;
 
+/* ── Aspect ratio presets ── */
+const ASPECT_PRESETS = [
+  { label: 'Free', value: undefined },
+  { label: '1:1', value: 1 },
+  { label: '16:9', value: 16 / 9 },
+  { label: '4:3', value: 4 / 3 },
+  { label: '3:2', value: 3 / 2 },
+] as const;
+
 /* ── Tool definitions ── */
 const TOOLS: { id: Tool; label: string; icon: string }[] = [
   { id: 'crop', label: 'Crop', icon: 'M4 4h4v16H4V4zm12 0h4v16h-4V4zM4 4h16v4H4V4zm0 12h16v4H4v-4z' },
@@ -37,6 +46,7 @@ export default function ImageEditor() {
 
   /* ── Tool-specific state ── */
   const [crop, setCrop] = useState<Crop>();
+  const [aspectRatio, setAspectRatio] = useState<number | undefined>(undefined);
   const [resizeW, setResizeW] = useState('');
   const [resizeH, setResizeH] = useState('');
   const [lockAspect, setLockAspect] = useState(true);
@@ -174,7 +184,7 @@ export default function ImageEditor() {
         workerRef.current = null;
       };
 
-      const msg: EditMessage = { type: 'edit', blob: image.blob, operation, params };
+      const msg: EditMessage = { type: 'edit', blob: image.blob, mimeType: image.blob.type || 'image/png', operation, params };
       worker.postMessage(msg);
     },
     [image, processing, pushUndo, showToast]

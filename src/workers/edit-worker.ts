@@ -1,6 +1,7 @@
 export interface EditMessage {
   type: 'edit';
   blob: Blob;
+  mimeType: string;
   operation: 'crop' | 'resize' | 'rotate' | 'flip';
   params: {
     x?: number;
@@ -27,7 +28,7 @@ export interface EditErrorMessage {
 }
 
 self.onmessage = async (e: MessageEvent<EditMessage>) => {
-  const { blob, operation, params } = e.data;
+  const { blob, mimeType, operation, params } = e.data;
 
   try {
     const bitmap = await createImageBitmap(blob);
@@ -96,7 +97,10 @@ self.onmessage = async (e: MessageEvent<EditMessage>) => {
 
     bitmap.close();
 
-    const resultBlob = await canvas.convertToBlob({ type: 'image/png' });
+    const outputType = mimeType === 'image/jpeg' ? 'image/jpeg' : 'image/png';
+    const encodeOpts: ImageEncodeOptions = { type: outputType };
+    if (outputType === 'image/jpeg') encodeOpts.quality = 0.92;
+    const resultBlob = await canvas.convertToBlob(encodeOpts);
 
     const response: EditResultMessage = {
       type: 'result',

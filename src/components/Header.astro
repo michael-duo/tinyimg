@@ -43,6 +43,24 @@ const currentPath = Astro.url.pathname;
       </svg>
     </button>
   </div>
+
+  <!-- Mobile menu -->
+  <nav id="mobile-menu" class="hidden absolute top-full left-0 right-0 border-b border-border bg-bg-primary/95 backdrop-blur-xl md:hidden">
+    <div class="flex flex-col p-4 gap-1">
+      {toolLinks.map(link => (
+        <a
+          href={link.href}
+          class={`text-sm px-4 py-3 rounded-lg transition-all ${
+            currentPath === link.href
+              ? 'bg-gold/10 text-gold font-semibold'
+              : 'text-text-secondary hover:text-white hover:bg-white/5'
+          }`}
+        >
+          {link.label}
+        </a>
+      ))}
+    </div>
+  </nav>
 </header>
 
 <!-- Spacer for fixed header -->
@@ -74,4 +92,11 @@ const currentPath = Astro.url.pathname;
       header?.classList.remove('scrolled');
     }
   }, { passive: true });
+
+  const menuBtn = document.querySelector('[aria-label="Menu"]');
+  const mobileMenu = document.getElementById('mobile-menu');
+
+  menuBtn?.addEventListener('click', () => {
+    mobileMenu?.classList.toggle('hidden');
+  });
 </script>

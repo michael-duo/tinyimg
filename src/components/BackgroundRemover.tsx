@@ -183,6 +183,8 @@ export default function BackgroundRemover() {
       await new Promise((r) => setTimeout(r, 0));
 
       const blob: Blob = await removeBackground(processFile, {
+        model: 'isnet_quint8',
+        device: 'gpu',
         progress: () => {
           // Progress is per-image; for batch we just show status
         },

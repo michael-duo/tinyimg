@@ -341,22 +341,42 @@ export default function ImageEditor() {
       {/* Context bar per tool */}
       <div className="bg-bg-card border border-border rounded-xl px-4 py-3">
         {activeTool === 'crop' && (
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-xs text-text-secondary">
-              Drag on the image to select a crop area
-              {crop && crop.width > 0 && (
-                <span className="ml-2 text-text-primary">
-                  {Math.round(crop.width)} x {Math.round(crop.height)}px (display)
-                </span>
-              )}
-            </p>
-            <button
-              onClick={handleCropApply}
-              disabled={!crop || crop.width === 0 || processing}
-              className="btn-shine bg-gold hover:bg-gold-light text-bg-primary text-xs font-bold px-4 py-2 rounded-md transition-all duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Apply Crop
-            </button>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-text-secondary">Aspect:</span>
+              <div className="flex gap-1 bg-bg-primary/60 border border-border rounded-xl p-1">
+                {ASPECT_PRESETS.map((preset) => (
+                  <button
+                    key={preset.label}
+                    onClick={() => { setAspectRatio(preset.value); setCrop(undefined); }}
+                    className={`text-xs px-3 py-1 rounded-lg transition-all duration-200 cursor-pointer ${
+                      aspectRatio === preset.value
+                        ? 'bg-gold text-bg-primary font-semibold'
+                        : 'text-text-secondary hover:text-text-primary'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-text-secondary">
+                Drag on the image to select a crop area
+                {crop && crop.width > 0 && (
+                  <span className="ml-2 text-text-primary">
+                    {Math.round(crop.width)} x {Math.round(crop.height)}px (display)
+                  </span>
+                )}
+              </p>
+              <button
+                onClick={handleCropApply}
+                disabled={!crop || crop.width === 0 || processing}
+                className="btn-shine bg-gold hover:bg-gold-light text-bg-primary text-xs font-bold px-4 py-2 rounded-md transition-all duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Apply Crop
+              </button>
+            </div>
           </div>
         )}
 
@@ -459,7 +479,7 @@ export default function ImageEditor() {
         )}
 
         {previewUrl && activeTool === 'crop' ? (
-          <ReactCrop crop={crop} onChange={(c) => setCrop(c)} disabled={processing}>
+          <ReactCrop crop={crop} onChange={(c) => setCrop(c)} disabled={processing} aspect={aspectRatio}>
             <img
               ref={imgRef}
               src={previewUrl}

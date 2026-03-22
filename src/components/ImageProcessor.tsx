@@ -11,6 +11,7 @@ import {
   WORKER_TIMEOUT_MS,
 } from '../lib/format-support';
 import type { ImageFormat } from '../lib/format-support';
+import { getImage, clearImage } from '../lib/image-transfer';
 
 interface Toast {
   message: string;
@@ -116,6 +117,17 @@ export default function ImageProcessor() {
     const accepted = validateFiles(files);
     if (accepted.length > 0) processFiles(accepted);
   }, [validateFiles, processFiles]);
+
+  useEffect(() => {
+    getImage().then((transferred) => {
+      if (transferred) {
+        clearImage();
+        const file = new File([transferred.blob], transferred.name, { type: transferred.mimeType });
+        handleFiles([file]);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleClear = useCallback(() => {
     if (workerRef.current) { workerRef.current.terminate(); workerRef.current = null; }

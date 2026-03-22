@@ -12,6 +12,16 @@ declare module '@mediapipe/tasks-vision' {
     close(): void;
   }
 
+  export class InteractiveSegmenter {
+    static createFromOptions(fileset: any, options: any): Promise<InteractiveSegmenter>;
+    segment(
+      image: HTMLImageElement | HTMLCanvasElement | HTMLVideoElement,
+      roi: { keypoint: { x: number; y: number } },
+      callback: (result: ImageSegmenterResult) => void
+    ): void;
+    close(): void;
+  }
+
   export class FaceDetector {
     static createFromOptions(fileset: any, options: any): Promise<FaceDetector>;
     detect(image: HTMLImageElement | HTMLCanvasElement | HTMLVideoElement): FaceDetectorResult;

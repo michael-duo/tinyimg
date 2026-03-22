@@ -4,6 +4,7 @@ export interface ProcessMessage {
   settings: {
     format: string;  // MIME type or 'original'
     maxWidth?: number;
+    quality?: number | 'auto';
   };
 }
 
@@ -111,9 +112,11 @@ self.onmessage = async (e: MessageEvent<ProcessMessage>) => {
     ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
 
-    // 4. Smart compress
+    // 4. Compress — manual quality or smart auto
     const requestedType = settings.format === 'original' ? file.type : settings.format;
-    const blob = await smartCompress(canvas, requestedType);
+    const blob = (typeof settings.quality === 'number')
+      ? await tryEncode(canvas, requestedType, settings.quality / 100)
+      : await smartCompress(canvas, requestedType);
 
     const response: ResultMessage = {
       type: 'result',

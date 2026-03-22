@@ -8,6 +8,11 @@
   "theme_color": "#c9a84c",
   "icons": [
     {
+      "src": "/logo.webp",
+      "sizes": "512x512",
+      "type": "image/webp"
+    },
+    {
       "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml"

@@ -11,11 +11,7 @@ const currentPath = Astro.url.pathname;
 <header id="site-header" class="fixed top-0 left-0 right-0 z-50 header-blur">
   <div class="max-w-6xl mx-auto px-6 md:px-10 py-4 flex justify-between items-center">
     <a href="/" class="flex items-center gap-2.5 group" aria-label="TinyIMG — Home">
-      <div class="w-8 h-8 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center group-hover:bg-gold/15 transition-colors">
-        <svg class="w-4 h-4 text-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-        </svg>
-      </div>
+      <img src="/logo.webp" alt="TinyIMG" class="w-8 h-8 rounded-lg" />
       <span class="text-lg font-bold tracking-wide text-white">
         Tiny<span class="text-gold-gradient">IMG</span>
       </span>

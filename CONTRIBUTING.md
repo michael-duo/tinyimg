@@ -1,14 +1,14 @@
 # Contributing
 
-Thank you for your interest in contributing to compressimg. This document covers how to set up the project locally, the PR process, and the code style guidelines.
+Thank you for your interest in contributing to TinyIMG. This document covers how to set up the project locally, the PR process, and the code style guidelines.
 
 ## Development Setup
 
 **Requirements:** Node.js 22 (see `.nvmrc`)
 
 ```bash
-git clone https://github.com/michaelduong/compressimg.git
-cd compressimg
+git clone https://github.com/michael-duo/tinyimg.git
+cd tinyimg
 npm install
 npm run dev
 ```
@@ -43,7 +43,7 @@ PRs that introduce server-side logic, backend dependencies, or image upload func
 
 ## Core Constraint: No Server-Side Code
 
-compressimg is intentionally a zero-server tool. All image processing must happen client-side using Web APIs (Web Worker, OffscreenCanvas, Canvas API). Do not introduce:
+TinyIMG is intentionally a zero-server tool. All image processing must happen client-side using Web APIs (Web Worker, OffscreenCanvas, Canvas API). Do not introduce:
 
 - API routes or server endpoints
 - Node.js image processing libraries (sharp, jimp, etc.)

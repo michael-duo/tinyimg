@@ -1,17 +1,17 @@
 {
-  "name": "compressimg",
+  "name": "tinyimg",
   "type": "module",
-  "version": "0.0.1",
-  "description": "Client-side image compression tool — compress, convert, and download images entirely in the browser with zero server uploads.",
+  "version": "1.0.0",
+  "description": "Fast, privacy-first image toolkit — compress, convert, edit, and remove backgrounds entirely in the browser.",
   "author": "Michael Duong",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/michaelduong/compressimg.git"
+    "url": "https://github.com/michael-duo/tinyimg.git"
   },
-  "homepage": "https://github.com/michaelduong/compressimg#readme",
+  "homepage": "https://tinyimg.michaelit.dev",
   "bugs": {
-    "url": "https://github.com/michaelduong/compressimg/issues"
+    "url": "https://github.com/michael-duo/tinyimg/issues"
   },
   "keywords": [
     "image-compression",

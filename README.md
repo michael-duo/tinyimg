@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/logo.svg" alt="TinyIMG" width="80" height="80" />
+  <img src="https://raw.githubusercontent.com/michael-duo/tinyimg/main/public/logo.webp" alt="TinyIMG" width="80" height="80" />
 </p>
 
 <h1 align="center">TinyIMG</h1>

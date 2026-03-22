@@ -3,6 +3,7 @@ import Layout from '../layouts/Layout.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import ImageEditor from '../components/ImageEditor';
+import EditFAQ from '../components/EditFAQ.astro';
 ---
 <Layout
   title="Free Online Image Editor - Crop, Resize, Rotate | TinyIMG"
@@ -10,6 +11,17 @@ import ImageEditor from '../components/ImageEditor';
 >
   <div class="noise-bg">
     <Header />
+
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "TinyIMG Image Editor",
+      "url": "https://tinyimg.michaelit.dev/edit",
+      "description": "Free online image editor. Crop, resize, rotate and flip images in your browser.",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "Any",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    })} />
 
     <section class="px-6 md:px-10 pt-8 pb-4">
       <div class="max-w-2xl mx-auto text-center">
@@ -25,6 +37,8 @@ import ImageEditor from '../components/ImageEditor';
         </div>
       </div>
     </div>
+
+    <EditFAQ />
 
     <Footer />
   </div>

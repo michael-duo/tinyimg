@@ -11,6 +11,17 @@ import BackgroundRemover from '../components/BackgroundRemover';
   <div class="noise-bg">
     <Header />
 
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "TinyIMG Background Remover",
+      "url": "https://tinyimg.michaelit.dev/remove-bg",
+      "description": "Free AI-powered background remover. Remove image backgrounds instantly in your browser.",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "Any",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    })} />
+
     <section class="px-6 md:px-10 pt-8 pb-4">
       <div class="max-w-2xl mx-auto text-center">
         <h1 class="font-display text-3xl md:text-4xl text-white mb-2">Background Remover</h1>

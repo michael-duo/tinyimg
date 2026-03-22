@@ -1,0 +1,74 @@
+---
+const faqs = [
+  {
+    question: 'Is the editor free to use?',
+    answer: 'Yes, 100% free. No sign-up, no account, no limits on usage.',
+  },
+  {
+    question: 'Are my images uploaded to a server?',
+    answer: 'No. All editing happens entirely in your browser using Web Workers and OffscreenCanvas. Your images never leave your device.',
+  },
+  {
+    question: 'What editing tools are available?',
+    answer: 'Crop (with aspect ratio presets), resize, rotate (90°/180°/270°), and flip (horizontal/vertical).',
+  },
+  {
+    question: 'Can I undo my edits?',
+    answer: 'Yes, up to 10 undo steps. Each operation is saved so you can step back through your editing history.',
+  },
+  {
+    question: 'What image formats are supported?',
+    answer: 'JPEG, PNG, WebP, AVIF, and GIF.',
+  },
+  {
+    question: 'Can I compress my image after editing?',
+    answer: 'Yes! Use the "Compress" button to send your edited image directly to the compression tool.',
+  },
+];
+---
+
+<script type="application/ld+json" set:html={JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": faqs.map(faq => ({
+    "@type": "Question",
+    "name": faq.question,
+    "acceptedAnswer": {
+      "@type": "Answer",
+      "text": faq.answer,
+    },
+  })),
+})} />
+
+<section id="faq" class="px-6 md:px-10 py-20">
+  <div class="max-w-2xl mx-auto">
+    <div class="text-center mb-14">
+      <span class="text-gold text-xs font-semibold tracking-widest uppercase">FAQ</span>
+      <h2 class="font-display text-3xl md:text-4xl text-white mt-3">
+        Common questions
+      </h2>
+    </div>
+
+    <div class="flex flex-col gap-2">
+      {faqs.map(faq => (
+        <details class="group bg-bg-card/60 border border-border rounded-xl hover:border-border-light transition-colors">
+          <summary class="flex justify-between items-center px-6 py-5 cursor-pointer list-none select-none">
+            <span class="text-white text-[15px] font-medium group-hover:text-gold transition-colors duration-300 pr-4">
+              {faq.question}
+            </span>
+            <span class="shrink-0 w-6 h-6 rounded-full border border-border flex items-center justify-center group-open:border-gold/30 group-open:bg-gold/8 transition-all duration-300">
+              <svg class="w-3 h-3 text-text-secondary group-open:text-gold group-open:rotate-45 transition-all duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            </span>
+          </summary>
+          <div class="px-6 pb-5 -mt-1">
+            <p class="text-text-secondary text-sm leading-relaxed">
+              {faq.answer}
+            </p>
+          </div>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>

@@ -69,7 +69,14 @@ export default function ResultCard({ result, index }: ResultCardProps) {
 
       {/* Name */}
       <div className="flex-1 min-w-0">
-        <p className="text-text-primary text-sm font-medium truncate">{originalFile.name}</p>
+        <div className="flex items-center gap-2 min-w-0">
+          <p className="text-text-primary text-sm font-medium truncate">{originalFile.name}</p>
+          {result.isAnimatedGif && status === 'done' && (
+            <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              First frame only
+            </span>
+          )}
+        </div>
         {status === 'processing' && (
           <span className="text-gold text-xs">Compressing...</span>
         )}

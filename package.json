@@ -36,12 +36,15 @@
   "dependencies": {
     "@astrojs/react": "^4.0.0",
     "@astrojs/sitemap": "^3.0.0",
+    "@imgly/background-removal": "^1.7.0",
     "@tailwindcss/vite": "^4.0.0",
     "astro": "^5.0.0",
     "file-saver": "^2.0.5",
+    "idb-keyval": "^6.2.2",
     "jszip": "^3.10.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-image-crop": "^11.0.10",
     "tailwindcss": "^4.0.0"
   },
   "devDependencies": {

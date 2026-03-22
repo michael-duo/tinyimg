@@ -4,15 +4,17 @@ import '../styles/global.css';
 interface Props {
   title?: string;
   description?: string;
+  ogImage?: string;
 }
 
 const {
   title = "TinyIMG — Free Image Compressor & Converter",
   description = "Compress, convert, and resize images instantly in your browser. Free, fast, and private — no data leaves your device. Supports JPEG, PNG, WebP, AVIF, GIF.",
+  ogImage: ogImagePath = "/og-image.png",
 } = Astro.props;
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
-const ogImage = new URL("/og-image.png", Astro.site);
+const ogImage = new URL(ogImagePath, Astro.site);
 ---
 
 <!doctype html>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { formatSize } from '../lib/format';
 import { downloadSingle } from '../lib/download';
+import { setImage } from '../lib/image-transfer';
 
 export type ResultStatus = 'pending' | 'processing' | 'done' | 'error';
 
@@ -39,6 +40,19 @@ export default function ResultCard({ result, index }: ResultCardProps) {
 
   const handleDownload = () => {
     if (blob) downloadSingle(blob, originalFile.name, outputFormat);
+  };
+
+  const handleTransfer = async (target: '/edit' | '/remove-bg') => {
+    if (!blob || !result.dimensions) return;
+    await setImage({
+      blob,
+      name: originalFile.name,
+      mimeType: outputFormat,
+      width: result.dimensions.width,
+      height: result.dimensions.height,
+      from: 'compress',
+    });
+    window.location.href = target;
   };
 
   return (
@@ -85,6 +99,20 @@ export default function ResultCard({ result, index }: ResultCardProps) {
             aria-label={`Download ${originalFile.name}`}
           >
             Save
+          </button>
+          <button
+            onClick={() => handleTransfer('/edit')}
+            className="text-xs px-2.5 py-1.5 rounded-md text-text-secondary hover:text-text-primary bg-white/5 hover:bg-white/8 transition-all duration-200 cursor-pointer"
+            aria-label={`Edit ${originalFile.name}`}
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => handleTransfer('/remove-bg')}
+            className="text-xs px-2.5 py-1.5 rounded-md text-text-secondary hover:text-text-primary bg-white/5 hover:bg-white/8 transition-all duration-200 cursor-pointer"
+            aria-label={`Remove background from ${originalFile.name}`}
+          >
+            BG
           </button>
         </div>
       )}

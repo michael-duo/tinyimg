@@ -1,9 +1,11 @@
 ---
-const navLinks = [
-  { label: 'Features', href: '#features' },
-  { label: 'How It Works', href: '#how-it-works' },
-  { label: 'FAQ', href: '#faq' },
+const toolLinks = [
+  { label: 'Compress', href: '/' },
+  { label: 'Edit', href: '/edit' },
+  { label: 'Remove BG', href: '/remove-bg' },
 ];
+
+const currentPath = Astro.url.pathname;
 ---
 
 <header id="site-header" class="fixed top-0 left-0 right-0 z-50 header-blur">
@@ -19,21 +21,19 @@ const navLinks = [
       </span>
     </a>
 
-    <nav class="hidden md:flex items-center gap-8">
-      {navLinks.map(link => (
+    <nav class="hidden md:flex items-center gap-1.5 bg-bg-primary/60 border border-border rounded-xl p-1">
+      {toolLinks.map(link => (
         <a
           href={link.href}
-          class="text-[13px] tracking-wide text-text-secondary hover:text-white transition-colors duration-300"
+          class={`text-[13px] tracking-wide px-4 py-2 rounded-lg transition-all duration-200 ${
+            currentPath === link.href
+              ? 'bg-gold text-bg-primary font-semibold'
+              : 'text-text-secondary hover:text-white'
+          }`}
         >
           {link.label}
         </a>
       ))}
-      <a
-        href="#tool"
-        class="text-[13px] font-semibold tracking-wide text-bg-primary bg-gold hover:bg-gold-light px-5 py-2 rounded-lg transition-all duration-300"
-      >
-        Start Compressing
-      </a>
     </nav>
 
     <!-- Mobile menu button -->

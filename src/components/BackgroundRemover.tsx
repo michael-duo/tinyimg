@@ -5,16 +5,16 @@ import type { TransferImage } from '../lib/image-transfer';
 import { downloadSingle, downloadAll, getCompressedFilename } from '../lib/download';
 import type { ResultMessage, ErrorMessage } from '../workers/image-worker';
 
-// MediaPipe is loaded dynamically at runtime to avoid SSR/Node resolution
-// issues with the package's broken "exports" field in package.json.
-// We store the segmenter instance as `any` to avoid needing static type imports.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Segmenter = any;
+
+type ModelType = 'general' | 'selfie';
 
 interface BgResult {
   id: string;
   originalFile: File;
   status: 'pending' | 'processing' | 'done' | 'error';
+  progress: number; // 0–100
   error?: string;
   originalUrl?: string;
   pngBlob?: Blob;
@@ -33,6 +33,26 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// ── Fake asymptotic progress ──
+// Quickly rises then slows as it approaches `ceiling`, never exceeding it.
+// Call returned cleanup to stop the timer.
+function startFakeProgress(
+  onProgress: (pct: number) => void,
+  ceiling = 95,
+  intervalMs = 300,
+): () => void {
+  let current = 0;
+  const id = setInterval(() => {
+    const remaining = ceiling - current;
+    // Random increment that shrinks as we approach ceiling
+    const step = Math.max(0.2, remaining * (0.03 + Math.random() * 0.06));
+    current = Math.min(ceiling, current + step);
+    onProgress(Math.round(current));
+  }, intervalMs);
+  return () => clearInterval(id);
+}
+
+// ── MediaPipe Selfie Segmenter ──
 async function loadSegmenter(): Promise<Segmenter> {
   const { FilesetResolver, ImageSegmenter } = await import(
     /* @vite-ignore */ '@mediapipe/tasks-vision'
@@ -56,6 +76,7 @@ async function loadSegmenter(): Promise<Segmenter> {
 export default function BackgroundRemover() {
   const [results, setResults] = useState<BgResult[]>([]);
   const [sliderPos, setSliderPos] = useState(50);
+  const [modelType, setModelType] = useState<ModelType>('general');
 
   const sliderRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
@@ -63,7 +84,7 @@ export default function BackgroundRemover() {
   const abortRef = useRef(false);
   const processingRef = useRef(false);
 
-  // MediaPipe segmenter ref
+  // MediaPipe segmenter ref (lazy-loaded only when selfie model selected)
   const segmenterRef = useRef<Segmenter>(null);
   const [modelReady, setModelReady] = useState(false);
 
@@ -79,20 +100,28 @@ export default function BackgroundRemover() {
     };
   }, [revokeUrls]);
 
-  // Preload MediaPipe ImageSegmenter on mount
+  // Preload model based on selection
   useEffect(() => {
     let cancelled = false;
     const init = async () => {
       try {
-        const segmenter = await loadSegmenter();
-        if (!cancelled) {
-          segmenterRef.current = segmenter;
-          setModelReady(true);
+        if (modelType === 'selfie') {
+          const segmenter = await loadSegmenter();
+          if (!cancelled) {
+            segmenterRef.current = segmenter;
+            setModelReady(true);
+          }
+        } else {
+          // @imgly/background-removal preloads on first use, but we can warm it up
+          const { preload } = await import('@imgly/background-removal');
+          await preload({ model: 'isnet_quint8', device: 'gpu' });
+          if (!cancelled) setModelReady(true);
         }
       } catch {
-        // Will retry when user uploads
+        // Will retry when user processes
       }
     };
+    setModelReady(false);
     if ('requestIdleCallback' in window) {
       const id = requestIdleCallback(() => init(), { timeout: 3000 });
       return () => {
@@ -106,7 +135,7 @@ export default function BackgroundRemover() {
         clearTimeout(id);
       };
     }
-  }, []);
+  }, [modelType]);
 
   // Check IndexedDB on mount for transferred image
   useEffect(() => {
@@ -154,60 +183,107 @@ export default function BackgroundRemover() {
     });
   };
 
-  // Remove background using MediaPipe ImageSegmenter
-  const removeBackgroundFromBlob = useCallback(async (blob: Blob): Promise<Blob> => {
-    let segmenter = segmenterRef.current;
-    if (!segmenter) {
-      // Lazy-init if preload hasn't finished
-      segmenter = await loadSegmenter();
-      segmenterRef.current = segmenter;
-      setModelReady(true);
-    }
-
-    // Create HTMLImageElement from blob
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error('Failed to load image'));
-      img.src = url;
-    });
-    URL.revokeObjectURL(url);
-
-    // Run segmentation
-    let maskData: Float32Array | null = null;
-    segmenter.segment(img, (result: { confidenceMasks?: Array<{ getAsFloat32Array(): Float32Array }> }) => {
-      if (result.confidenceMasks && result.confidenceMasks.length > 0) {
-        // Copy the mask data (it gets recycled after callback)
-        const mask = result.confidenceMasks[0];
-        maskData = new Float32Array(mask.getAsFloat32Array());
-      }
-    });
-
-    if (!maskData) throw new Error('Segmentation failed');
-
-    // Apply mask to original image
-    const canvas = document.createElement('canvas');
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext('2d')!;
-    ctx.drawImage(img, 0, 0);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const pixels = imageData.data;
-
-    for (let i = 0; i < (maskData as Float32Array).length; i++) {
-      pixels[i * 4 + 3] = Math.round((maskData as Float32Array)[i] * 255); // Set alpha from mask
-    }
-
-    ctx.putImageData(imageData, 0, 0);
-
-    return new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob(
-        (b) => (b ? resolve(b) : reject(new Error('Canvas export failed'))),
-        'image/png'
-      );
-    });
+  // Update progress for a specific result
+  const updateProgress = useCallback((id: string, progress: number) => {
+    setResults((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, progress: Math.round(progress) } : r))
+    );
   }, []);
+
+  // Remove background using @imgly/background-removal (general purpose)
+  const removeBackgroundImgly = useCallback(
+    async (blob: Blob, id: string): Promise<Blob> => {
+      const { removeBackground } = await import('@imgly/background-removal');
+      return removeBackground(blob, {
+        model: 'isnet_quint8',
+        device: 'gpu',
+        output: { format: 'image/png', quality: 1 },
+        progress: (_key: string, current: number, total: number) => {
+          if (total > 0) {
+            updateProgress(id, (current / total) * 100);
+          }
+        },
+      });
+    },
+    [updateProgress]
+  );
+
+  // Remove background using MediaPipe ImageSegmenter (selfie/people)
+  const removeBackgroundMediaPipe = useCallback(
+    async (blob: Blob, id: string): Promise<Blob> => {
+      let segmenter = segmenterRef.current;
+      if (!segmenter) {
+        segmenter = await loadSegmenter();
+        segmenterRef.current = segmenter;
+        setModelReady(true);
+      }
+
+      // MediaPipe has no progress callback — use fake progress
+      const stopFake = startFakeProgress((pct) => updateProgress(id, pct));
+
+      try {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error('Failed to load image'));
+          img.src = url;
+        });
+        URL.revokeObjectURL(url);
+
+        let maskData: Float32Array | null = null;
+        segmenter.segment(
+          img,
+          (result: {
+            confidenceMasks?: Array<{ getAsFloat32Array(): Float32Array }>;
+          }) => {
+            if (result.confidenceMasks && result.confidenceMasks.length > 0) {
+              const mask = result.confidenceMasks[0];
+              maskData = new Float32Array(mask.getAsFloat32Array());
+            }
+          }
+        );
+
+        if (!maskData) throw new Error('Segmentation failed');
+
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const pixels = imageData.data;
+
+        for (let i = 0; i < (maskData as Float32Array).length; i++) {
+          pixels[i * 4 + 3] = Math.round((maskData as Float32Array)[i] * 255);
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        return new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob(
+            (b) => (b ? resolve(b) : reject(new Error('Canvas export failed'))),
+            'image/png'
+          );
+        });
+      } finally {
+        stopFake();
+        updateProgress(id, 100);
+      }
+    },
+    [updateProgress]
+  );
+
+  // Dispatch to selected model
+  const removeBackgroundFromBlob = useCallback(
+    async (blob: Blob, id: string): Promise<Blob> => {
+      if (modelType === 'selfie') {
+        return removeBackgroundMediaPipe(blob, id);
+      }
+      return removeBackgroundImgly(blob, id);
+    },
+    [modelType, removeBackgroundImgly, removeBackgroundMediaPipe]
+  );
 
   const processSingleImage = useCallback(
     async (file: File, id: string): Promise<void> => {
@@ -219,7 +295,7 @@ export default function BackgroundRemover() {
         // Yield to browser before heavy work
         await new Promise((r) => setTimeout(r, 0));
 
-        const pngBlob = await removeBackgroundFromBlob(file);
+        const pngBlob = await removeBackgroundFromBlob(file, id);
 
         if (abortRef.current) return;
 
@@ -318,6 +394,7 @@ export default function BackgroundRemover() {
         id: String(++bgResultCounter),
         originalFile: file,
         status: 'pending' as const,
+        progress: 0,
       }));
 
       setResults((prev) => [...prev, ...newEntries]);
@@ -408,18 +485,76 @@ export default function BackgroundRemover() {
   const isSingleDone = results.length === 1 && results[0].status === 'done';
   const singleResult = isSingleDone ? results[0] : null;
 
+  // ── Model selector pills ──
+  const modelSelector = (
+    <div className="flex items-center justify-center gap-1 mb-4">
+      <button
+        onClick={() => setModelType('general')}
+        disabled={isProcessing}
+        className={`text-xs font-medium px-3.5 py-1.5 rounded-l-lg border transition-all cursor-pointer ${
+          modelType === 'general'
+            ? 'bg-gold/15 text-gold border-gold/40'
+            : 'bg-white/5 text-text-secondary border-border hover:bg-white/8'
+        } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
+      >
+        General
+      </button>
+      <button
+        onClick={() => setModelType('selfie')}
+        disabled={isProcessing}
+        className={`text-xs font-medium px-3.5 py-1.5 rounded-r-lg border border-l-0 transition-all cursor-pointer ${
+          modelType === 'selfie'
+            ? 'bg-gold/15 text-gold border-gold/40'
+            : 'bg-white/5 text-text-secondary border-border hover:bg-white/8'
+        } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
+      >
+        Selfie
+      </button>
+    </div>
+  );
+
+  const modelHint = (
+    <p className="text-center text-xs mt-3 text-text-secondary/50">
+      {modelReady ? (
+        <span className="text-success/70">
+          {modelType === 'general' ? 'General model ready — best for logos, products, objects' : 'Selfie model ready — optimized for people'}
+        </span>
+      ) : (
+        <span>Loading AI model in background...</span>
+      )}
+    </p>
+  );
+
   // ── Idle state ──
   if (results.length === 0) {
     return (
       <div className="w-full max-w-2xl mx-auto">
+        {modelSelector}
         <DropZone onFiles={handleFiles} />
-        <p className="text-center text-xs mt-3 text-text-secondary/50">
-          {modelReady ? (
-            <span className="text-success/70">AI model ready</span>
-          ) : (
-            <span>Loading AI model in background...</span>
-          )}
-        </p>
+        {modelHint}
+      </div>
+    );
+  }
+
+  // ── Single image processing → progress bar ──
+  const isSingleProcessing = results.length === 1 && (results[0].status === 'processing' || results[0].status === 'pending');
+  if (isSingleProcessing) {
+    const r = results[0];
+    return (
+      <div className="w-full max-w-2xl mx-auto space-y-4">
+        <div className="rounded-xl border border-border bg-bg-card p-6 text-center space-y-4">
+          <p className="text-sm text-text-primary font-medium truncate">{r.originalFile.name}</p>
+          {/* Progress bar */}
+          <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gold rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${r.progress}%` }}
+            />
+          </div>
+          <p className="text-xs text-text-secondary">
+            Removing background... <span className="text-gold font-medium">{r.progress}%</span>
+          </p>
+        </div>
       </div>
     );
   }
@@ -666,7 +801,7 @@ function BgResultCard({ result, index, onDownloadPng, onDownloadWebp, onTransfer
       <div className="flex-1 min-w-0">
         <p className="text-text-primary text-sm font-medium truncate">{result.originalFile.name}</p>
         {result.status === 'processing' && (
-          <span className="text-gold text-xs">Removing background...</span>
+          <span className="text-gold text-xs">Removing background... {result.progress}%</span>
         )}
         {result.status === 'pending' && (
           <span className="text-text-secondary/50 text-xs">Queued</span>
@@ -708,12 +843,11 @@ function BgResultCard({ result, index, onDownloadPng, onDownloadWebp, onTransfer
         </div>
       )}
 
-      {/* Spinner when processing */}
+      {/* Progress percentage when processing */}
       {result.status === 'processing' && (
-        <svg className="progress-ring w-5 h-5 shrink-0" viewBox="0 0 36 36">
-          <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(201,168,76,0.15)" strokeWidth="3" />
-          <circle cx="18" cy="18" r="14" fill="none" stroke="#c9a84c" strokeWidth="3" strokeDasharray="60 28" strokeLinecap="round" />
-        </svg>
+        <span className="text-gold text-xs font-medium shrink-0 tabular-nums w-8 text-right">
+          {result.progress}%
+        </span>
       )}
     </div>
   );

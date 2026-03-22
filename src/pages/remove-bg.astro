@@ -1,0 +1,31 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import BackgroundRemover from '../components/BackgroundRemover';
+---
+<Layout
+  title="Free Background Remover - Remove Image Background | TinyIMG"
+  description="Remove image backgrounds instantly with AI — free, private, and entirely in your browser. No uploads, no sign-up."
+>
+  <div class="noise-bg">
+    <Header />
+
+    <section class="px-6 md:px-10 pt-8 pb-4">
+      <div class="max-w-2xl mx-auto text-center">
+        <h1 class="font-display text-3xl md:text-4xl text-white mb-2">Background Remover</h1>
+        <p class="text-text-secondary text-base">Remove backgrounds instantly with AI — right in your browser</p>
+      </div>
+    </section>
+
+    <div id="tool" class="px-6 md:px-10 mt-4 mb-8">
+      <div class="max-w-3xl mx-auto">
+        <div class="tool-glow bg-bg-card/40 rounded-2xl p-6 md:p-8">
+          <BackgroundRemover client:visible />
+        </div>
+      </div>
+    </div>
+
+    <Footer />
+  </div>
+</Layout>

@@ -55,14 +55,24 @@ export default function BackgroundRemover() {
 
   useEffect(() => {
     let cancelled = false;
-    import('@imgly/background-removal').then((mod) => {
-      if (cancelled) return;
-      modelRef.current = { removeBackground: mod.removeBackground };
-      setModelReady(true);
-    }).catch(() => {
-      // Will retry when user uploads
-    });
-    return () => { cancelled = true; };
+    // Defer model preload to idle time so it doesn't block page rendering
+    const load = () => {
+      import('@imgly/background-removal').then((mod) => {
+        if (cancelled) return;
+        modelRef.current = { removeBackground: mod.removeBackground };
+        setModelReady(true);
+      }).catch(() => {
+        // Will retry when user uploads
+      });
+    };
+    if ('requestIdleCallback' in window) {
+      const id = requestIdleCallback(load, { timeout: 3000 });
+      return () => { cancelled = true; cancelIdleCallback(id); };
+    } else {
+      // Fallback: defer with setTimeout
+      const id = setTimeout(load, 100);
+      return () => { cancelled = true; clearTimeout(id); };
+    }
   }, []);
 
   // Check IndexedDB on mount for transferred image

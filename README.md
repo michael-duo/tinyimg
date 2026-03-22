@@ -28,6 +28,21 @@
 
 ---
 
+<p align="center">
+  <a href="https://tinyimg.michaelit.dev/">
+    <img src="https://raw.githubusercontent.com/michael-duo/tinyimg/main/public/og-image.png" alt="TinyIMG — Compress & Convert" width="100%" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://tinyimg.michaelit.dev/edit">
+    <img src="https://raw.githubusercontent.com/michael-duo/tinyimg/main/public/og-edit.webp" alt="Image Editor" width="49%" />
+  </a>
+  <a href="https://tinyimg.michaelit.dev/remove-bg">
+    <img src="https://raw.githubusercontent.com/michael-duo/tinyimg/main/public/og-removebg.webp" alt="Background Remover" width="49%" />
+  </a>
+</p>
+
 ## Why TinyIMG?
 
 Most image tools upload your files to a server. TinyIMG doesn't. Every operation — compression, format conversion, background removal, editing — happens **100% client-side** using Web Workers, OffscreenCanvas, and on-device AI models. Your images never leave your browser.
